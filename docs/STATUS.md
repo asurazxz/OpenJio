@@ -12,7 +12,7 @@ This is the single place to check where OpenJio stands: what works, how it was c
 | Runs locally | Yes: `pnpm --dir client dev`, optional `pnpm --dir server dev` |
 | Hosted backend | Not yet. Supabase migration written but never applied; no project created |
 | Deployed app | No |
-| Committed | Yes, on `revamp/ideate` (local, not pushed) |
+| Committed | Yes, on `revamp/ideate`, pushed to origin |
 | Deadline | Unknown (open question 2 in the plan) |
 
 **Demo mode** means all app data lives in the browser (localStorage), seeded with sample people, hangouts and listings. Each tab can sign in as a different demo person, and tabs stay in sync, so multi-person flows can be shown on one machine. The data API (`client/src/api/index.js`) is async and enforces membership and host permissions, so a Supabase adapter can replace it without changing the screens.
@@ -59,28 +59,26 @@ Credentials present in the local `.env` today: Gemini only.
 
 ## 5. Known issues and limits
 
-1. **Not pushed.** The build is committed locally on `revamp/ideate` only.
-2. **Demo mode only.** Sign-in is choosing a demo person. Data is per browser and resets with "Reset demo data".
-3. **Sample data is approximate.** Real venues with hours, addresses and coordinates written from memory; events and deals are made up and labelled "Sample data". Spot-check before a demo relies on a specific venue.
-4. **Sample dates age.** Seeded hangouts are in November 2026 and sample events run to mid December 2026. After that, events drop out of Discover and plans.
-5. **Travel times are estimates** (distance with a detour factor) until OneMap credentials are added. They are labelled as estimates in the UI.
-6. **Weights are tuned on the evaluation cases**, so the comparison favours the beam search more than an independent test set would.
-7. **The alternatives dialog** takes about a second, because each option re-times the whole plan.
-8. **Published scraped listings** have no opening hours, so they only enter plans by hand and show an "hours unknown" warning, which does not block confirming.
-9. **Migration never executed.** It may contain SQL errors. Invite-link joins need a security definer join function that is not written yet (the migration only lets users join public hangouts directly).
-10. **OneMap search token requirement** comes from the recommendation document and has not been checked against the live API.
+1. **Demo mode only.** Sign-in is choosing a demo person. Data is per browser and resets with "Reset demo data".
+2. **Sample data is approximate.** Real venues with hours, addresses and coordinates written from memory; events and deals are made up and labelled "Sample data". Spot-check before a demo relies on a specific venue.
+3. **Sample dates age.** Seeded hangouts are in November 2026 and sample events run to mid December 2026. After that, events drop out of Discover and plans.
+4. **Travel times are estimates** (distance with a detour factor) until OneMap credentials are added. They are labelled as estimates in the UI.
+5. **Weights are tuned on the evaluation cases**, so the comparison favours the beam search more than an independent test set would.
+6. **The alternatives dialog** takes about a second, because each option re-times the whole plan.
+7. **Published scraped listings** have no opening hours, so they only enter plans by hand and show an "hours unknown" warning, which does not block confirming.
+8. **Migration never executed.** It may contain SQL errors. Invite-link joins need a security definer join function that is not written yet (the migration only lets users join public hangouts directly).
+9. **OneMap search token requirement** comes from the recommendation document and has not been checked against the live API.
 
 ## 6. Next steps
 
 In rough priority order:
 
-1. Push `revamp/ideate` when the team is ready to see it.
-2. Add OneMap credentials and confirm live search and routing (`/api/health` shows `"onemap": "ok"`).
-3. Label 30 to 50 posts in `pipeline/labels/labels.json` and run `pipeline/evaluate.py` to measure extraction accuracy.
-4. Apply the migration to a local Postgres or a Supabase branch and fix any errors, add the invite-join function, run Supabase advisors, then write a live adapter for `client/src/api/` with real auth.
-5. Create the Google OAuth client and test calendar import with test users.
-6. Settle the open questions in the plan (deadline, ownership, limits) and assign owners in its tracker.
-7. Deploy the client and server.
+1. Add OneMap credentials and confirm live search and routing (`/api/health` shows `"onemap": "ok"`).
+2. Label 30 to 50 posts in `pipeline/labels/labels.json` and run `pipeline/evaluate.py` to measure extraction accuracy.
+3. Apply the migration to a local Postgres or a Supabase branch and fix any errors, add the invite-join function, run Supabase advisors, then write a live adapter for `client/src/api/` with real auth.
+4. Create the Google OAuth client and test calendar import with test users.
+5. Settle the open questions in the plan (deadline, ownership, limits) and assign owners in its tracker.
+6. Deploy the client and server.
 
 ## 7. Where things are
 
