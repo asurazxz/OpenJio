@@ -11,6 +11,7 @@ import ListingCard from '../components/ListingCard.vue'
 import MapView from '../components/MapView.vue'
 import AppDialog from '../components/AppDialog.vue'
 import EmptyState from '../components/EmptyState.vue'
+import CategoryIcon from '../components/brand/CategoryIcon.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -27,6 +28,7 @@ const when = ref(typeof route.query.for === 'string' ? `h:${route.query.for}` : 
 const view = ref('list')
 const active = ref(null)
 
+watch(() => route.query.type, (t) => (type.value = typeof t === 'string' ? t : 'all'))
 watch([q, type], () => router.replace({ query: { ...route.query, q: q.value || undefined, type: type.value !== 'all' ? type.value : undefined } }))
 
 const types = [
@@ -155,8 +157,14 @@ const fmtHours = (w) => (w?.length ? w.map(([a, b]) => `${a} to ${b === '23:59' 
 <template>
   <div class="page">
     <header class="page-head">
-      <h1>Discover</h1>
-      <p>Places, events, deals and open jios around Singapore, ranked for {{ user ? 'you' : 'everyone' }}. Every listing shows where it came from.</p>
+      <template v-if="type === 'hangout'">
+        <h1>Open jios</h1>
+        <p>Public hangouts with spots left. Have a look, then join if it suits you.</p>
+      </template>
+      <template v-else>
+        <h1>Discover</h1>
+        <p>Places, events, deals and open jios around Singapore, ranked for {{ user ? 'you' : 'everyone' }}. Every listing shows where it came from and when it was checked.</p>
+      </template>
     </header>
 
     <div class="filters card-x">
@@ -164,7 +172,7 @@ const fmtHours = (w) => (w?.length ? w.map(([a, b]) => `${a} to ${b === '23:59' 
         <div class="search">
           <label for="q" class="visually-hidden">Search</label>
           <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M11 4a7 7 0 1 1 0 14 7 7 0 0 1 0-14Zm5 12 4 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" /></svg>
-          <input id="q" v-model="q" type="search" class="form-control" placeholder="Search kopi, bouldering, Katong..." />
+          <input id="q" v-model="q" type="search" class="form-control" placeholder="Search kopi, bouldering, Katong…" />
         </div>
         <div class="f-selects">
           <label class="visually-hidden" for="area-f">Area</label>
@@ -183,7 +191,7 @@ const fmtHours = (w) => (w?.length ? w.map(([a, b]) => `${a} to ${b === '23:59' 
       </div>
       <div class="chip-row mt-2" role="group" aria-label="Interests">
         <button v-if="user" type="button" class="chip" :aria-pressed="forYou && !picked.length" :title="'Rank by your profile interests'" @click="forYou = !forYou; picked = []">For you</button>
-        <button v-for="i in INTERESTS" :key="i.slug" type="button" class="chip" :aria-pressed="picked.includes(i.slug)" @click="toggleInterest(i.slug)">{{ i.label }}</button>
+        <button v-for="i in INTERESTS" :key="i.slug" type="button" class="chip" :aria-pressed="picked.includes(i.slug)" @click="toggleInterest(i.slug)"><CategoryIcon :name="i.slug" :size="16" />{{ i.label }}</button>
       </div>
     </div>
 
@@ -287,26 +295,26 @@ const fmtHours = (w) => (w?.length ? w.map(([a, b]) => `${a} to ${b === '23:59' 
 .filters { padding: 16px; }
 .f-row { display: flex; flex-wrap: wrap; gap: 10px; }
 .search { position: relative; flex: 1 1 260px; }
-.search svg { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--ink-3); }
+.search svg { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--ink-2); }
 .search .form-control { padding-left: 38px; }
 .f-selects { display: flex; gap: 10px; flex: 1 1 300px; }
 .f-selects .form-select { flex: 1; min-width: 0; }
-.seg { display: flex; background: var(--paper-2); border-radius: 999px; padding: 4px; }
-.seg button { border: 0; background: none; padding: 6px 16px; border-radius: 999px; font-weight: 650; color: var(--ink-2); }
+.seg { display: flex; background: var(--paper-2); border-radius: 14px; padding: 4px; }
+.seg button { border: 0; background: none; min-height: 38px; padding: 6px 16px; border-radius: 11px; font-weight: 700; color: var(--ink-2); }
 .seg button.on { background: var(--card); color: var(--ink); box-shadow: var(--shadow-soft); }
 .split { display: grid; gap: 20px; }
 .split > *, .cards > li { min-width: 0; }
 .cards { list-style: none; padding: 0; margin: 0; display: grid; gap: 12px; }
 .map-sticky { position: sticky; top: calc(var(--header-h) + 16px); }
 .legend { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 8px; color: var(--ink-2); }
-.dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 5px; border: 1px solid var(--line-strong); }
+.dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 5px; }
 .dot.teal { background: var(--teal); } .dot.plum { background: var(--plum); } .dot.mustard { background: var(--mustard); } .dot.tomato { background: var(--tomato); }
 .facts { display: grid; gap: 8px; margin-bottom: 14px; }
 .facts div { display: grid; grid-template-columns: 96px 1fr; gap: 10px; }
-dt { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-3); padding-top: 3px; }
+dt { font-size: 0.85rem; font-weight: 700; color: var(--ink-2); padding-top: 1px; }
 dd { margin: 0; }
-.pick { display: flex; align-items: flex-start; padding: 10px 12px; border: 1.5px solid var(--line); border-radius: var(--radius-sm); cursor: pointer; background: var(--paper); }
-.pick.on { border-color: var(--line-strong); background: var(--mustard-soft); }
+.pick { display: flex; align-items: flex-start; min-height: 44px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 14px; cursor: pointer; background: var(--card); }
+.pick.on { border-color: var(--tomato); background: var(--tomato-soft); }
 @media (min-width: 576px) {
   .cards { grid-template-columns: repeat(2, 1fr); }
 }

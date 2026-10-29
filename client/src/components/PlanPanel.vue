@@ -9,6 +9,9 @@ import PlanTimeline from './PlanTimeline.vue'
 import MapView from './MapView.vue'
 import AppDialog from './AppDialog.vue'
 import EmptyState from './EmptyState.vue'
+import VoteStamp from './brand/VoteStamp.vue'
+import WashiHeading from './brand/WashiHeading.vue'
+import SparkDoodle from './brand/SparkDoodle.vue'
 
 const props = defineProps({ detail: { type: Object, required: true } })
 const emit = defineEmits(['goto'])
@@ -61,20 +64,37 @@ function remove(i) {
   save(next, 'Stop removed')
 }
 
+// The stamp only shows as selected once the store confirms the vote.
+const pendingVote = ref(null)
+const liveMsg = ref('')
 async function castVote(stop, value) {
+  if (pendingVote.value) return
+  pendingVote.value = stop.id
+  const next = stop.myVote === value ? 0 : value
   try {
-    await vote(h.value.id, stop.id, stop.myVote === value ? 0 : value)
+    await vote(h.value.id, stop.id, next)
+    liveMsg.value = next === 0 ? `Vote removed for ${stop.listing.title}` : `Voted ${next > 0 ? 'keep' : 'swap'} for ${stop.listing.title}`
   } catch (e) {
     toastError(e)
+  } finally {
+    pendingVote.value = null
   }
 }
+const phase = computed(() => {
+  if (h.value.stage === 'final') return { key: 'final', label: 'Confirmed' }
+  if (solo.value) return { key: 'draft', label: 'Draft' }
+  if (blocking.value.length) return { key: 'blocked', label: 'Needs fixing' }
+  if (voteSummary.value.total && voteSummary.value.fully === voteSummary.value.total) return { key: 'ready', label: 'Ready to confirm' }
+  return { key: 'voting', label: 'Voting' }
+})
+const justConfirmed = ref(false)
 
 async function finalize() {
   busy.value = true
   try {
     await finalizePlan(h.value.id)
-    toast(solo.value ? 'Plan saved. Enjoy!' : 'Plan confirmed. Everyone can see the final version.')
-    emit('goto', 'go')
+    justConfirmed.value = true
+    liveMsg.value = solo.value ? 'Plan saved' : 'Plan confirmed'
   } catch (e) {
     toastError(e)
   } finally {
@@ -82,12 +102,16 @@ async function finalize() {
   }
 }
 
-/* Swap dialog */
+/* Swap sheet: inspect an option, preview the new timings, then confirm. */
 const swapIndex = ref(-1)
 const alternatives = ref(null)
+const altPick = ref(null)
+const altPreview = ref(null)
 async function openSwap(i) {
   swapIndex.value = i
   alternatives.value = null
+  altPick.value = null
+  altPreview.value = null
   try {
     alternatives.value = await getAlternatives(h.value.id, i)
   } catch (e) {
@@ -95,11 +119,29 @@ async function openSwap(i) {
     swapIndex.value = -1
   }
 }
+async function pickAlt(alt) {
+  altPick.value = alt
+  altPreview.value = null
+  const next = ids.value.slice()
+  next[swapIndex.value] = alt.listing.id
+  try {
+    altPreview.value = await previewStops(h.value.id, next)
+  } catch (e) {
+    toastError(e)
+  }
+}
+const changedTimes = computed(() => {
+  if (!altPreview.value || !plan.value) return []
+  return altPreview.value.stops
+    .map((st, i) => ({ i, title: st.listing.title, before: plan.value.stops[i], after: st }))
+    .filter((x) => x.i >= swapIndex.value && (!x.before || x.before.start !== x.after.start || x.before.end !== x.after.end || x.i === swapIndex.value))
+})
 async function useAlt(alt) {
   const next = ids.value.slice()
   next[swapIndex.value] = alt.listing.id
   swapIndex.value = -1
   await save(next, `Swapped in ${alt.listing.title}`)
+  liveMsg.value = `Swapped in ${alt.listing.title}`
 }
 
 /* Add-stop dialog */
@@ -176,7 +218,7 @@ const voteSummary = computed(() => {
             <p class="muted">We check opening hours, deals and travel times for {{ fmtRange(h.lockedSlot.start, h.lockedSlot.end) }}, then balance everyone's interests so nobody is left out.</p>
             <button type="button" class="btn btn-primary" :disabled="busy" @click="generate()">
               <span v-if="busy" class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>
-              {{ busy ? 'Working it out' : 'Generate plan' }}
+              {{ busy ? 'Working it out…' : 'Generate plan' }}
             </button>
           </div>
         </div>
@@ -204,7 +246,16 @@ const voteSummary = computed(() => {
       <div v-if="h.planChangedAt && h.stage === 'voting'" class="notice mb-3">
         <p><strong>The plan changed.</strong> Votes on changed stops were reset. {{ isHost ? 'Confirm again when everyone has had a look.' : 'Have another look and vote again.' }}</p>
       </div>
-      <div v-if="h.stage === 'final'" class="notice teal mb-3">
+      <div v-if="h.stage === 'final' && justConfirmed" class="confirmed card-x mb-3">
+        <SparkDoodle class="c-spark" :size="48" />
+        <span class="c-stamp" aria-hidden="true">{{ solo ? 'SAVED' : 'CONFIRMED' }}</span>
+        <div>
+          <p class="c-title">{{ solo ? 'Saved. Enjoy your afternoon.' : 'Steady lah! The plan is locked in.' }}</p>
+          <p class="small muted m-0">{{ solo ? 'Your day plan is ready.' : 'Everyone can see the final version now.' }}</p>
+        </div>
+        <button type="button" class="btn btn-primary btn-sm ms-auto" @click="emit('goto', 'go')">See the day plan</button>
+      </div>
+      <div v-else-if="h.stage === 'final'" class="notice teal mb-3">
         <p><strong>Confirmed.</strong> {{ isHost ? 'Editing a stop will reopen voting for everyone.' : 'This is the final plan.' }}</p>
       </div>
       <div v-if="blocking.length" class="notice danger mb-3">
@@ -213,23 +264,21 @@ const voteSummary = computed(() => {
 
       <div class="row g-4">
         <div class="col-lg-7">
+          <div class="plan-head">
+            <WashiHeading tag="h3" tone="orange" class="m-0">The plan</WashiHeading>
+            <span class="phase tnum" :class="'ph-' + phase.key">{{ phase.label }}</span>
+          </div>
           <PlanTimeline :stops="plan.stops" :start="h.startArea" :issues="plan.issues" :active-index="active" @focus="active = $event">
             <template #actions="{ stop, index }">
               <div class="stop-actions">
                 <div v-if="!solo && h.stage === 'voting'" class="votes" role="group" :aria-label="`Vote on ${stop.listing.title}`">
-                  <button type="button" class="vote up" :aria-pressed="stop.myVote === 1" :aria-label="`Keep ${stop.listing.title}`" @click="castVote(stop, 1)">
-                    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M12 5l7 8h-4v6H9v-6H5z" fill="currentColor" /></svg>
-                    {{ stop.votes.up }}
-                  </button>
-                  <button type="button" class="vote down" :aria-pressed="stop.myVote === -1" :aria-label="`Swap out ${stop.listing.title}`" @click="castVote(stop, -1)">
-                    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M12 19l-7-8h4V5h6v6h4z" fill="currentColor" /></svg>
-                    {{ stop.votes.down }}
-                  </button>
-                  <span class="small muted">{{ stop.votes.voted }}/{{ stop.votes.of }} voted</span>
-                  <span v-if="stop.votes.net < 0" class="tag tag-danger">{{ isHost ? 'Consider swapping' : 'Group is unsure' }}</span>
+                  <VoteStamp kind="keep" :selected="stop.myVote === 1" :count="stop.votes.up" :disabled="pendingVote === stop.id" :label="`Keep ${stop.listing.title}, ${stop.votes.up} so far`" @press="castVote(stop, 1)" />
+                  <VoteStamp kind="swap" :selected="stop.myVote === -1" :count="stop.votes.down" :disabled="pendingVote === stop.id" :label="`Vote to swap ${stop.listing.title}, ${stop.votes.down} so far`" @press="castVote(stop, -1)" />
+                  <span class="small muted tnum">{{ stop.votes.voted }} of {{ stop.votes.of }} voted</span>
+                  <span v-if="stop.votes.net < 0" class="tag tag-plum">{{ isHost ? 'Group leans swap' : 'Group is unsure' }}</span>
                 </div>
                 <div v-if="isHost" class="host-actions">
-                  <button type="button" class="btn btn-ghost btn-sm" @click="openSwap(index)">Swap</button>
+                  <button type="button" class="btn btn-ghost btn-sm" @click="openSwap(index)">Swap stop</button>
                   <button type="button" class="btn btn-ghost btn-sm" :disabled="index === 0" :aria-label="`Move ${stop.listing.title} earlier`" @click="move(index, -1)">Earlier</button>
                   <button type="button" class="btn btn-ghost btn-sm" :disabled="index === plan.stops.length - 1" :aria-label="`Move ${stop.listing.title} later`" @click="move(index, 1)">Later</button>
                   <button type="button" class="btn btn-ghost btn-sm" :aria-label="`Remove ${stop.listing.title}`" @click="remove(index)">Remove</button>
@@ -257,37 +306,62 @@ const voteSummary = computed(() => {
               </ul>
               <p class="small muted mb-0">{{ plan.generatedBy === 'manual' ? 'Built by hand and checked automatically.' : 'Generated by comparing many possible orders of stops.' }} <RouterLink to="/how">How it works</RouterLink></p>
             </div>
-            <div v-if="isHost && h.stage === 'voting'" class="card-x pop mt-3">
+            <div v-if="isHost && h.stage === 'voting'" class="card-x pop mt-3 confirm-box">
+              <p class="phase-line"><span class="phase" :class="'ph-' + phase.key">{{ phase.label }}</span></p>
               <template v-if="!solo">
-                <p class="m-0"><strong>{{ voteSummary.fully }} of {{ voteSummary.total }}</strong> stops have votes from everyone.</p>
-                <p v-if="voteSummary.flagged" class="small text-danger mb-0">{{ voteSummary.flagged }} {{ voteSummary.flagged === 1 ? 'stop has' : 'stops have' }} more swaps than keeps.</p>
+                <p class="m-0 tnum"><strong>{{ voteSummary.fully }} of {{ voteSummary.total }}</strong> stops have votes from everyone.</p>
+                <p v-if="voteSummary.flagged" class="small mb-0 tnum" style="color: var(--plum-ink)">{{ voteSummary.flagged }} {{ voteSummary.flagged === 1 ? 'stop has' : 'stops have' }} more swaps than keeps.</p>
               </template>
               <button type="button" class="btn btn-primary w-100 mt-3" :disabled="busy || blocking.length > 0" @click="finalize">
                 {{ solo ? 'Save this plan' : 'Close voting and confirm' }}
               </button>
-              <p v-if="blocking.length" class="small muted mt-2 mb-0">Fix the marked stops first.</p>
+              <p v-if="blocking.length" class="small mt-2 mb-0" style="color: var(--danger)">Fix the marked stops first: {{ blocking.map((b) => b.message).join(' ') }}</p>
             </div>
           </div>
         </aside>
       </div>
     </template>
 
-    <AppDialog :open="swapIndex !== -1" :title="isHost ? 'Swap this stop' : 'Other options'" @close="swapIndex = -1">
-      <p v-if="plan?.stops[swapIndex]" class="small muted">
-        Instead of <strong>{{ plan.stops[swapIndex].listing.title }}</strong>. Each option keeps the rest of the plan on time.
-      </p>
+    <AppDialog :open="swapIndex !== -1" :title="isHost ? 'Swap this stop' : 'Other options'" sheet @close="swapIndex = -1">
+      <div v-if="plan?.stops[swapIndex]" class="current-stop">
+        <span class="small muted">Now</span>
+        <p class="m-0 fw-bold">{{ plan.stops[swapIndex].listing.title }}</p>
+        <p class="small muted m-0 tnum">{{ fmtTime(plan.stops[swapIndex].start) }} to {{ fmtTime(plan.stops[swapIndex].end) }}</p>
+      </div>
+      <p class="small muted mt-3">Each option keeps the rest of the plan on time.</p>
       <div v-if="!alternatives" class="py-4 text-center"><span class="spinner-border" aria-label="Finding options"></span></div>
       <p v-else-if="!alternatives.length" class="muted">Nothing else of this kind fits here without breaking the rest of the plan.</p>
       <ul v-else class="alts">
-        <li v-for="a in alternatives" :key="a.listing.id" class="alt">
-          <div>
-            <span class="tag" :class="TYPE_TONE[a.listing.type]">{{ TYPE_LABEL[a.listing.type] }}</span>
-            <p class="alt-title">{{ a.listing.title }}</p>
-            <p class="small muted m-0">{{ areaLabel(a.listing.area) }} · {{ a.reasons.join(' · ') }}</p>
-          </div>
-          <button v-if="isHost" type="button" class="btn btn-secondary btn-sm" @click="useAlt(a)">Use this</button>
+        <li v-for="a in alternatives" :key="a.listing.id">
+          <button type="button" class="alt" :class="{ on: altPick?.listing.id === a.listing.id }" :aria-pressed="altPick?.listing.id === a.listing.id" @click="pickAlt(a)">
+            <span class="d-flex gap-2 align-items-center">
+              <span class="tag" :class="TYPE_TONE[a.listing.type]">{{ TYPE_LABEL[a.listing.type] }}</span>
+              <span v-if="a.listing.type === 'place' && !a.listing.openingHours" class="tag tag-mustard">Hours not verified</span>
+            </span>
+            <span class="alt-title">{{ a.listing.title }}</span>
+            <span class="small muted">{{ areaLabel(a.listing.area) }}<template v-if="a.listing.priceText">, {{ a.listing.priceText }}</template></span>
+            <span class="small alt-why">{{ a.reasons.join('. ') }}.</span>
+          </button>
         </li>
       </ul>
+      <div v-if="altPick" class="preview mt-3" aria-live="polite">
+        <p class="small fw-bold mb-1">New timings</p>
+        <div v-if="!altPreview" class="small muted">Working out the new times…</div>
+        <template v-else>
+          <ul class="times">
+            <li v-for="c in changedTimes" :key="c.i" class="small tnum">
+              <strong>{{ c.i + 1 }}. {{ c.title }}</strong>
+              <span class="muted"> {{ fmtTime(c.after.start) }} to {{ fmtTime(c.after.end) }}</span>
+              <span v-if="c.before && c.before.start !== c.after.start" class="moved"> (was {{ fmtTime(c.before.start) }})</span>
+            </li>
+          </ul>
+          <p v-for="iss in altPreview.issues.filter((x) => !SOFT_ISSUES.includes(x.type))" :key="iss.type + iss.index" class="small m-0" style="color: var(--danger)">{{ iss.message }}</p>
+        </template>
+      </div>
+      <div class="sheet-actions">
+        <button type="button" class="btn btn-ghost" @click="swapIndex = -1">Keep current stop</button>
+        <button v-if="isHost" type="button" class="btn btn-primary" :disabled="!altPick || !altPreview || altPreview.issues.some((x) => !SOFT_ISSUES.includes(x.type))" @click="useAlt(altPick)">Confirm swap</button>
+      </div>
       <p v-if="!isHost && alternatives?.length" class="small muted mb-0 mt-2">Vote to swap and the host will see these options.</p>
     </AppDialog>
 
@@ -308,7 +382,7 @@ const voteSummary = computed(() => {
               <span v-if="shortlistIds.has(l.id)" class="tag tag-plum">Shortlisted</span>
             </div>
             <p class="alt-title">{{ l.title }}</p>
-            <p class="small muted m-0">{{ areaLabel(l.area) }} · {{ l.priceText }}</p>
+            <p class="small muted m-0">{{ areaLabel(l.area) }}<template v-if="l.priceText">, {{ l.priceText }}</template></p>
             <div v-if="previewFor === l.id && preview" class="mt-2">
               <p v-if="!previewIssues.length" class="small m-0 ok">Fits: {{ fmtTime(preview.stops[preview.stops.length - 1].start) }} to {{ fmtTime(preview.stops[preview.stops.length - 1].end) }}</p>
               <p v-for="iss in previewIssues" :key="iss.type" class="small text-danger m-0">{{ iss.message }}</p>
@@ -321,6 +395,7 @@ const voteSummary = computed(() => {
         </li>
       </ul>
     </AppDialog>
+    <p class="visually-hidden" role="status" aria-live="polite">{{ liveMsg }}</p>
   </div>
 </template>
 
@@ -330,31 +405,51 @@ const voteSummary = computed(() => {
 .choice p { margin: 0 0 8px; font-size: 0.93rem; }
 .choice .btn { margin-top: auto; }
 .stop-actions { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; margin-top: 10px; padding-top: 10px; border-top: 1.5px dashed var(--line); }
-.votes { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-.vote {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px 10px;
-  border-radius: 999px;
-  border: 1.5px solid var(--line);
-  background: var(--paper);
-  color: var(--ink-2);
-  font-weight: 700;
+.votes { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.plan-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
+.phase { display: inline-flex; align-items: center; gap: 6px; font-size: 0.8rem; font-weight: 800; padding: 3px 10px; border-radius: 999px; background: var(--paper-2); color: var(--ink-2); }
+.phase::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.ph-voting { background: var(--tomato-soft); color: var(--tomato-ink); }
+.ph-ready { background: var(--teal-soft); color: var(--teal-ink); }
+.ph-final { background: var(--teal-soft); color: var(--teal-ink); }
+.ph-blocked { background: var(--danger-soft); color: var(--danger); }
+.phase-line { margin: 0 0 8px; }
+.confirmed { position: relative; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; overflow: visible; }
+.c-spark { position: absolute; top: -20px; left: -14px; }
+.c-stamp {
+  font-family: var(--font-display);
+  font-weight: 900;
   font-size: 0.85rem;
+  letter-spacing: 0.06em;
+  color: var(--teal-ink);
+  border: 2.5px dashed var(--teal);
+  border-radius: 10px;
+  padding: 4px 10px;
+  transform: rotate(-6deg);
+  animation: c-stamp var(--oj-t-celebrate) var(--oj-ease-stamp) both;
 }
-.vote:hover { border-color: var(--ink-3); }
-.vote.up[aria-pressed='true'] { background: var(--teal); border-color: var(--line-strong); color: var(--on-accent); }
-.vote.down[aria-pressed='true'] { background: var(--tomato); border-color: var(--line-strong); color: var(--on-accent); }
+@keyframes c-stamp { 0% { opacity: 0; transform: rotate(-14deg) scale(1.3); } 100% { opacity: 1; transform: rotate(-6deg) scale(1); } }
+.c-title { font-family: var(--font-display); font-weight: 900; font-size: 1.1rem; margin: 0; }
+.current-stop { padding: 12px 14px; border-radius: 14px; background: var(--paper-2); }
+.alt { width: 100%; text-align: left; display: grid; gap: 3px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 14px; background: var(--card); color: var(--ink); transition: border-color var(--oj-t-quick), background-color var(--oj-t-quick); }
+.alt:hover { border-color: var(--line-strong); }
+.alt.on { border-color: var(--tomato); background: var(--tomato-soft); }
+.alt-why { color: var(--teal-ink); font-weight: 600; }
+.preview { padding: 12px 14px; border-radius: 14px; border: 1px dashed var(--line-strong); }
+.times { list-style: none; padding: 0; margin: 0 0 4px; display: grid; gap: 2px; }
+.moved { color: var(--mustard-ink); font-weight: 700; }
+.times .muted, .times .moved { margin-left: 4px; }
+.sheet-actions { display: flex; justify-content: space-between; gap: 8px; margin-top: 16px; position: sticky; bottom: -20px; background: var(--card); padding: 12px 0 4px; }
 .host-actions { display: flex; flex-wrap: wrap; gap: 2px; margin-left: auto; }
 .host-actions .btn { --bs-btn-padding-x: 0.55rem; }
 .side { position: sticky; top: calc(var(--header-h) + 16px); }
 .reasons { margin: 0 0 10px; padding-left: 18px; }
 .reasons li { margin-bottom: 4px; }
-.alts, .add-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; max-height: 60vh; overflow: auto; }
-.alt, .add-item { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px; border: 1.5px solid var(--line); border-radius: var(--radius-sm); background: var(--paper); }
+.alts, .add-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
+.add-list { max-height: 60vh; overflow: auto; }
+.add-item { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px; border: 1px solid var(--line); border-radius: 14px; background: var(--card); }
 .add-item.open { border-color: var(--line-strong); }
 .alt-title { font-weight: 700; margin: 4px 0 2px; }
-.ok { color: var(--teal); font-weight: 650; }
+.ok { color: var(--teal-ink); font-weight: 700; }
 .min-w-0 { min-width: 0; }
 </style>

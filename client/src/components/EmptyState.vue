@@ -8,10 +8,15 @@ defineProps({
 
 <template>
   <div class="empty" :class="tone">
-    <svg class="art" viewBox="0 0 120 60" aria-hidden="true">
-      <path d="M8 52 A52 52 0 0 1 112 52" fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round" opacity="0.35" />
-      <path d="M26 52 A34 34 0 0 1 94 52" fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round" opacity="0.6" />
-      <circle cx="60" cy="52" r="12" fill="currentColor" />
+    <svg class="art" viewBox="0 0 140 72" aria-hidden="true">
+      <ellipse cx="70" cy="64" rx="56" ry="5" fill="currentColor" opacity="0.12" />
+      <path d="M38 40h64a32 22 0 0 1-64 0Z" fill="currentColor" />
+      <path d="M46 46h48" stroke="var(--card)" stroke-width="3" stroke-linecap="round" opacity=".6" />
+      <g fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" opacity="0.55">
+        <path d="M56 32c-3-4 3-7 0-12" /><path d="M70 30c-3-4 3-7 0-12" /><path d="M84 32c-3-4 3-7 0-12" />
+      </g>
+      <circle cx="18" cy="44" r="9" fill="var(--oj-teal)" opacity=".85" /><path d="M8 64a10 10 0 0 1 20 0" fill="var(--oj-teal)" opacity=".85" />
+      <circle cx="122" cy="44" r="9" fill="var(--oj-pink)" opacity=".85" /><path d="M112 64a10 10 0 0 1 20 0" fill="var(--oj-pink)" opacity=".85" />
     </svg>
     <h3>{{ title }}</h3>
     <p v-if="body">{{ body }}</p>
@@ -23,13 +28,14 @@ defineProps({
 .empty {
   text-align: center;
   padding: 32px 20px;
-  border: 1.5px dashed var(--line);
-  border-radius: var(--radius);
+  border: 1.5px dashed var(--line-strong);
+  border-radius: var(--radius-lg);
   background: var(--card);
 }
-.art { width: 120px; height: 60px; margin-bottom: 8px; }
+.art { width: 140px; height: 72px; margin-bottom: 10px; }
 .mustard .art { color: var(--mustard); }
 .tomato .art { color: var(--tomato); }
+.plum .art { color: var(--plum); }
 .teal .art { color: var(--teal); }
 h3 { margin: 0 0 6px; }
 p { color: var(--ink-2); margin: 0 auto; max-width: 46ch; }

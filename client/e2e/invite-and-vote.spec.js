@@ -3,7 +3,7 @@ import { test, expect } from '@playwright/test'
 async function signInAs(page, name) {
   await page.goto('/signin')
   await page.getByRole('button', { name }).click()
-  await expect(page.getByRole('heading', { level: 1, name: 'Your plans' })).toBeVisible()
+  await expect(page.getByRole('heading', { level: 1, name: /^(Kopi first|Free later|Jio makan), / })).toBeVisible()
 }
 
 test('an invite link lets Priya join the seeded hangout and the host sees her', async ({ page }) => {

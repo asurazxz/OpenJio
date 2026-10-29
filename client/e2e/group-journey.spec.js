@@ -3,7 +3,7 @@ import { test, expect } from '@playwright/test'
 async function signInAs(page, name) {
   await page.goto('/signin')
   await page.getByRole('button', { name }).click()
-  await expect(page.getByRole('heading', { level: 1, name: 'Your plans' })).toBeVisible()
+  await expect(page.getByRole('heading', { level: 1, name: /^(Kopi first|Free later|Jio makan), / })).toBeVisible()
 }
 
 test('Mei creates a group plan, locks a time, generates and confirms a plan', async ({ page }) => {
@@ -11,18 +11,23 @@ test('Mei creates a group plan, locks a time, generates and confirms a plan', as
 
   await page.goto('/new?mode=group')
   await page.getByLabel('Name', { exact: true }).fill('E2E catch-up')
+  await page.getByRole('button', { name: 'Makan' }).click()
+  for (let i = 0; i < 3; i++) await page.getByRole('button', { name: 'Next' }).click()
   await page.getByRole('button', { name: 'Create and invite' }).click()
+
+  // The invite slip shows the link before going to the jio.
+  await expect(page.getByLabel('Invite link')).toHaveValue(/\/j\//)
+  await page.getByRole('link', { name: 'Go to jio' }).click()
 
   await expect(page).toHaveURL(/\/h\/[^/?]+\?created=1$/)
   await expect(page.getByRole('heading', { level: 1, name: 'E2E catch-up' })).toBeVisible()
 
-  // Time tab: quick-fill the first day, then save.
-  await page.locator('details > summary').first().click()
-  await page.getByRole('button', { name: 'All day' }).first().click()
+  // Time tab: fill with a preset, then save.
+  await page.getByRole('button', { name: /^All day/ }).click()
   await page.getByRole('button', { name: 'Save my times' }).click()
 
   // Best times: with one responder who is also the host, a slot is offered.
-  const lock = page.getByRole('button', { name: 'Lock', exact: true }).first()
+  const lock = page.getByRole('button', { name: 'Lock this time' }).first()
   await expect(lock).toBeVisible()
   await lock.click()
 

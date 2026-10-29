@@ -4,7 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { session, currentUser, signOut, resetDemo } from '../api/index.js'
 import { revision } from '../api/store.js'
 import { getTheme, setTheme } from '../lib/theme.js'
-import BrandMark from './BrandMark.vue'
+import OpenJioWordmark from './brand/OpenJioWordmark.vue'
 import UserAvatar from './UserAvatar.vue'
 import { toast } from '../lib/toast.js'
 
@@ -55,26 +55,31 @@ function doReset() {
   router.push('/')
 }
 const links = [
-  { to: '/', label: 'Plans', name: 'home' },
-  { to: '/discover', label: 'Discover', name: 'discover' },
-  { to: '/how', label: 'How it works', name: 'how' },
+  { to: '/', label: 'Home', key: 'home' },
+  { to: '/discover', label: 'Discover', key: 'discover' },
+  { to: '/discover?type=hangout', label: 'Open jios', key: 'openjios' },
+  { to: '/how', label: 'How it works', key: 'how' },
 ]
+function isActive(key) {
+  if (key === 'openjios') return route.name === 'discover' && route.query.type === 'hangout'
+  if (key === 'discover') return route.name === 'discover' && route.query.type !== 'hangout'
+  return route.name === key
+}
 </script>
 
 <template>
   <header class="app-header">
     <div class="inner">
       <RouterLink to="/" class="brand" aria-label="OpenJio home">
-        <BrandMark :size="32" />
-        <span class="wordmark">OpenJio</span>
+        <OpenJioWordmark :size="32" />
       </RouterLink>
 
       <nav class="main-nav" aria-label="Main">
-        <RouterLink v-for="l in links" :key="l.to" :to="l.to" class="nav-link-x" :class="{ active: route.name === l.name }">{{ l.label }}</RouterLink>
+        <RouterLink v-for="l in links" :key="l.key" :to="l.to" class="nav-link-x" :class="{ active: isActive(l.key) }" :aria-current="isActive(l.key) ? 'page' : undefined">{{ l.label }}</RouterLink>
       </nav>
 
       <div class="right">
-        <RouterLink v-if="user" to="/new" class="btn btn-primary btn-sm d-none d-md-inline-flex">New plan</RouterLink>
+        <RouterLink v-if="user" to="/new" class="btn btn-primary btn-sm d-none d-md-inline-flex">Create a jio</RouterLink>
         <button type="button" class="btn btn-ghost btn-sm icon-btn" :aria-label="themeLabel" :title="themeLabel" @click="cycleTheme">
           <svg v-if="theme === 'dark'" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5Z" fill="currentColor" /></svg>
           <svg v-else-if="theme === 'light'" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><circle cx="12" cy="12" r="4.5" fill="currentColor" /><g stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8" /></g></svg>
@@ -110,10 +115,10 @@ const links = [
   z-index: 50;
   background: color-mix(in srgb, var(--paper) 88%, transparent);
   backdrop-filter: saturate(1.2) blur(8px);
-  border-bottom: 1.5px solid var(--line);
+  border-bottom: 1px solid var(--line);
 }
 .inner {
-  max-width: 1120px;
+  max-width: 1200px;
   margin: 0 auto;
   height: var(--header-h);
   padding: 0 var(--gutter);
@@ -122,26 +127,19 @@ const links = [
   gap: 20px;
 }
 .brand { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; color: var(--ink); }
-.wordmark {
-  font-family: var(--font-display);
-  font-variation-settings: 'SOFT' 100, 'opsz' 72;
-  font-weight: 750;
-  font-size: 1.35rem;
-  letter-spacing: -0.02em;
-}
 .main-nav { display: none; gap: 4px; }
 .nav-link-x {
-  padding: 6px 12px;
+  padding: 8px 14px;
   border-radius: 999px;
   color: var(--ink-2);
   text-decoration: none;
-  font-weight: 600;
+  font-weight: 700;
   font-size: 0.95rem;
 }
 .nav-link-x:hover { color: var(--ink); background: var(--paper-2); }
-.nav-link-x.active { color: var(--ink); background: var(--paper-2); }
+.nav-link-x.active { color: var(--tomato-ink); background: var(--tomato-soft); }
 .right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
-.icon-btn { width: 38px; height: 38px; padding: 0; display: inline-grid; place-items: center; }
+.icon-btn { width: 44px; height: 44px; min-height: 44px; padding: 0; display: inline-grid; place-items: center; }
 .avatar-btn { background: none; border: 0; padding: 0; border-radius: 50%; cursor: pointer; }
 .menu-wrap { position: relative; }
 .menu {
@@ -158,8 +156,8 @@ const links = [
   text-align: left;
   background: none;
   border: 0;
-  padding: 9px 10px;
-  border-radius: 8px;
+  padding: 11px 12px;
+  border-radius: 10px;
   color: var(--ink);
   text-decoration: none;
   font-size: 0.95rem;

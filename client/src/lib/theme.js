@@ -1,5 +1,7 @@
 // Light/dark preference. "system" follows the OS; the choice is a per-browser convenience.
+// data-theme drives the OpenJio tokens; data-bs-theme keeps Bootstrap components in step.
 const KEY = 'openjio:theme'
+const media = typeof matchMedia === 'function' ? matchMedia('(prefers-color-scheme: dark)') : null
 
 export function getTheme() {
   try {
@@ -20,6 +22,13 @@ export function setTheme(value) {
 
 export function applySavedTheme() {
   const t = getTheme()
-  if (t === 'system') document.documentElement.removeAttribute('data-theme')
-  else document.documentElement.setAttribute('data-theme', t)
+  const root = document.documentElement
+  if (t === 'system') root.removeAttribute('data-theme')
+  else root.setAttribute('data-theme', t)
+  const dark = t === 'dark' || (t === 'system' && !!media?.matches)
+  root.setAttribute('data-bs-theme', dark ? 'dark' : 'light')
 }
+
+media?.addEventListener?.('change', () => {
+  if (getTheme() === 'system') applySavedTheme()
+})

@@ -39,9 +39,9 @@ li {
   padding: 5px 12px 5px 5px;
   border-radius: 999px;
   background: var(--paper-2);
-  color: var(--ink-3);
+  color: var(--ink-2);
   font-size: 0.85rem;
-  font-weight: 650;
+  font-weight: 700;
 }
 .dot {
   width: 24px;
@@ -51,10 +51,11 @@ li {
   place-items: center;
   font-size: 0.78rem;
   background: var(--card);
-  border: 1.5px solid var(--line);
+  border: 1px solid var(--line);
+  font-variant-numeric: tabular-nums;
 }
 li.done { color: var(--ink-2); }
 li.done .dot { background: var(--teal); color: var(--on-accent); border-color: var(--teal); }
-li.current { background: var(--ink); color: var(--paper); }
-li.current .dot { background: var(--mustard); color: var(--ink); border-color: var(--mustard); }
+li.current { background: var(--tomato-soft); color: var(--tomato-ink); }
+li.current .dot { background: var(--tomato); color: var(--on-accent); border-color: var(--tomato); }
 </style>

@@ -8,6 +8,7 @@ import { LISTINGS, AREAS, INTERESTS } from '../data/seed-listings.js'
 import { rankSlots, earliestCommonSlot, heatmap, mergeIntervals } from '../lib/algo/slots.js'
 import { generateItinerary, greedyItinerary, retime, alternativesFor } from '../lib/algo/itinerary.js'
 import { joinSuggestions } from '../lib/algo/reachability.js'
+import { isVerifiedDeal } from '../lib/algo/validity.js'
 import { travelFn, prefetchLegs, fetchDrafts } from '../lib/travel.js'
 import { fromDateKey, toMs, toIso, DAY, MIN } from '../lib/time.js'
 
@@ -500,6 +501,21 @@ function planInput(s, h, extra = {}) {
   }
 }
 
+// One plain sentence on why a stop is in the plan, from data the planner actually used.
+function stopReason(listing, members, names, solo) {
+  const tags = listing.interests || []
+  const fans = members.filter((m) => tags.some((t) => (m.interests[t] || 0) >= 0.6)).map((m) => names[m.id] || 'Someone')
+  const list = (xs) => (xs.length > 3 ? `${xs.slice(0, 3).join(', ')} and others` : xs.length > 1 ? `${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}` : xs[0])
+  const parts = []
+  if (listing.kind === 'meal') parts.push('Covers the meal in this time window')
+  if (fans.length && solo) parts.push('Matches your interests')
+  else if (fans.length === members.length && members.length > 1) parts.push('Everyone is into this kind of thing')
+  else if (fans.length) parts.push(`${list(fans)} ${fans.length === 1 ? 'likes' : 'like'} this kind of thing`)
+  if (isVerifiedDeal(listing)) parts.push('Has a verified deal')
+  if (listing.type === 'event') parts.push('Only on at this time')
+  return parts.length ? parts.join('. ') + '.' : 'Fits the time and keeps travel short.'
+}
+
 function tally(s, stop, memberCount) {
   const votes = Object.values(s.votes[stop.id] || {}).filter((v) => v.version === stop.version)
   const up = votes.filter((v) => v.value > 0).length
@@ -522,8 +538,10 @@ export async function getPlan(id) {
   if (missing !== -1) {
     return { hangoutId: id, stops: [], issues: [{ index: missing, type: 'missing', message: 'A stop was removed from the listings. Regenerate or rebuild the plan.' }], broken: true }
   }
-  const r = retime(listings, planInput(s, h))
+  const input = planInput(s, h)
+  const r = retime(listings, input)
   const memberCount = s.members.filter((m) => m.hangoutId === id).length
+  const names = Object.fromEntries(s.users.map((u) => [u.id, u.name.split(' ')[0]]))
   return {
     hangoutId: id,
     generatedBy: plan.generatedBy,
@@ -537,6 +555,7 @@ export async function getPlan(id) {
       ...clone(st),
       id: plan.stops[i].id,
       version: plan.stops[i].version,
+      why: stopReason(st.listing, input.members, names, h.mode === 'solo'),
       votes: tally(s, plan.stops[i], memberCount),
       myVote: (() => {
         const v = s.votes[plan.stops[i].id]?.[user.id]

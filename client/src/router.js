@@ -2,13 +2,13 @@ import { createRouter, createWebHistory } from 'vue-router'
 import { session } from './api/index.js'
 
 const routes = [
-  { path: '/', name: 'home', component: () => import('./views/HomeView.vue'), meta: { auth: true, title: 'Your plans' } },
+  { path: '/', name: 'home', component: () => import('./views/HomeView.vue'), meta: { auth: true, title: 'Home' } },
   { path: '/signin', name: 'signin', component: () => import('./views/SignInView.vue'), meta: { title: 'Sign in' } },
   { path: '/discover', name: 'discover', component: () => import('./views/DiscoverView.vue'), meta: { title: 'Discover' } },
-  { path: '/new', name: 'new', component: () => import('./views/NewHangoutView.vue'), meta: { auth: true, title: 'New plan' } },
+  { path: '/new', name: 'new', component: () => import('./views/NewHangoutView.vue'), meta: { auth: true, title: 'Create a jio' } },
   { path: '/h/:id', name: 'hangout', component: () => import('./views/HangoutView.vue'), meta: { auth: true, title: 'Hangout' } },
-  { path: '/j/:token', name: 'join', component: () => import('./views/JoinView.vue'), meta: { title: 'Join' } },
-  { path: '/o/:id', name: 'openjio', component: () => import('./views/JoinView.vue'), meta: { title: 'Open jio' } },
+  { path: '/j/:token', name: 'join', component: () => import('./views/JoinView.vue'), meta: { title: 'Join', bare: true } },
+  { path: '/o/:id', name: 'openjio', component: () => import('./views/JoinView.vue'), meta: { title: 'Open jio', bare: true } },
   { path: '/profile', name: 'profile', component: () => import('./views/ProfileView.vue'), meta: { auth: true, title: 'Profile' } },
   { path: '/review', name: 'review', component: () => import('./views/ReviewView.vue'), meta: { auth: true, title: 'Review listings' } },
   { path: '/how', name: 'how', component: () => import('./views/HowView.vue'), meta: { title: 'How planning works' } },

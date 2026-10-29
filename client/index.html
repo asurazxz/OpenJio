@@ -3,11 +3,21 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#F7F0E3" />
+    <meta name="theme-color" content="#FFF8F1" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#1C1917" media="(prefers-color-scheme: dark)" />
+    <script>
+      (function () {
+        var t = null
+        try { t = localStorage.getItem('openjio:theme') } catch (e) {}
+        var d = t === 'dark' || ((!t || t === 'system') && matchMedia('(prefers-color-scheme: dark)').matches)
+        if (t === 'dark' || t === 'light') document.documentElement.setAttribute('data-theme', t)
+        document.documentElement.setAttribute('data-bs-theme', d ? 'dark' : 'light')
+      })()
+    </script>
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght,SOFT@9..144,500..800,100&family=DM+Sans:opsz,wght@9..40,400..700&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=DM+Sans:opsz,wght@9..40,400..700&display=swap" rel="stylesheet" />
     <title>OpenJio</title>
   </head>
   <body>

@@ -106,8 +106,9 @@ defineExpose({ invalidate: () => map?.invalidateSize() })
 <style scoped>
 .map-x {
   width: 100%;
-  border-radius: var(--radius);
-  border: 1.5px solid var(--line-strong);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-soft);
   overflow: hidden;
   z-index: 0;
 }
@@ -120,18 +121,19 @@ defineExpose({ invalidate: () => map?.invalidateSize() })
   height: 30px;
   border-radius: 50% 50% 50% 4px;
   transform: rotate(-45deg);
-  border: 1.5px solid var(--line-strong);
-  font: 700 13px/1 var(--font-body);
+  border: 2.5px solid var(--card);
+  font: 900 13px/1 var(--font-display);
   color: var(--on-accent);
   background: var(--tomato);
-  box-shadow: 2px 2px 0 var(--line-strong);
+  box-shadow: 0 3px 8px rgba(var(--oj-shadow-rgb), 0.25);
+  transition: transform var(--oj-t-quick) var(--oj-ease-out);
 }
 :global(.pin b) { transform: rotate(45deg); font-weight: 700; }
 :global(.pin.tone-teal) { background: var(--teal); }
 :global(.pin.tone-mustard) { background: var(--mustard); color: var(--ink); }
-:global(.pin.tone-plum) { background: var(--plum); }
+:global(.pin.tone-plum) { background: var(--plum); color: var(--on-accent); }
 :global(.pin.tone-ink) { background: var(--ink); color: var(--paper); }
-:global(.pin.active) { outline: 3px solid var(--mustard); }
+:global(.pin.active) { outline: 3px solid var(--ink); outline-offset: 1px; transform: rotate(-45deg) scale(1.15); }
 :global(.pin.start) {
   width: 22px;
   height: 22px;

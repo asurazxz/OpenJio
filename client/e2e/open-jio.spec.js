@@ -3,7 +3,7 @@ import { test, expect } from '@playwright/test'
 async function signInAs(page, name) {
   await page.goto('/signin')
   await page.getByRole('button', { name }).click()
-  await expect(page.getByRole('heading', { level: 1, name: 'Your plans' })).toBeVisible()
+  await expect(page.getByRole('heading', { level: 1, name: /^(Kopi first|Free later|Jio makan), / })).toBeVisible()
 }
 
 test('Mei finds an open jio, joins it and votes on a stop', async ({ page }) => {
@@ -18,7 +18,7 @@ test('Mei finds an open jio, joins it and votes on a stop', async ({ page }) => 
 
   await expect(page).toHaveURL(/\/o\/h-hawker$/)
   await expect(page.getByText('Hosted by Priya Raman')).toBeVisible()
-  await page.getByRole('button', { name: 'Join', exact: true }).click()
+  await page.getByRole('button', { name: 'Join this jio' }).click()
 
   await expect(page).toHaveURL(/\/h\/h-hawker$/)
   const keep = page.getByRole('button', { name: /^Keep / }).first()

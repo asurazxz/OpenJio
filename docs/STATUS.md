@@ -2,7 +2,7 @@
 
 Last updated: 29 Oct 2026. Branch: `revamp/ideate`.
 
-This is the single place to check where OpenJio stands: what works, how it was checked, what is missing, and what to do next. Scope and decisions live in [IDEATION-PLAN.md](./IDEATION-PLAN.md); algorithm results in [EVALUATION.md](./EVALUATION.md); credentials in [SETUP-CREDENTIALS.md](./SETUP-CREDENTIALS.md).
+This is the single place to check where OpenJio stands: what works, how it was checked, what is missing, and what to do next. Scope and decisions live in [IDEATION-PLAN.md](./IDEATION-PLAN.md); visual design in [DESIGN.md](./DESIGN.md); algorithm results in [EVALUATION.md](./EVALUATION.md); credentials in [SETUP-CREDENTIALS.md](./SETUP-CREDENTIALS.md).
 
 ## 1. Summary
 
@@ -27,6 +27,7 @@ This is the single place to check where OpenJio stands: what works, how it was c
 | R4 Itinerary builder | Built | Beam search with hard checks (hours, event times, deal validity, travel, slot end, meal windows, no back-to-back meals); greedy baseline; plain-language reasons; per-stop alternatives that keep the plan feasible; manual build with fit check; diagnosis and one-click relaxations when nothing fits | Travel is estimated unless OneMap credentials are set; stops can sit up to about 6 km from the start area |
 | R5 Outing companion | Built | Final timeline and map; late-join suggestion using travel time and minimum overlap, with clear no-match reasons; NEA two-hour forecast near the start area | Weather is the current forecast, not the outing date's; host timing updates deferred |
 | R6 Content pipeline | Built | Fetches confirmgood.com JSON and five Telegram channel previews; regex pre-parse plus Gemini extraction; dedupe by composite source id; drafts kept separate from published; reviewer queue with edit, publish, reject and unpublish | Hand-labelled accuracy set is empty, so extraction accuracy is not measured; Telethon untested |
+| Visual design (Hawker Glow) | Built | Tokens, Nunito and DM Sans, light and dark, brand motifs (wordmark, washi headings, Keep/Swap stamps, Jio Slip, route legs), stepped create flow, phone day-list availability with modes and Undo, ranked time cards, swap sheet with timing preview, late-join card. Details and departures in [DESIGN.md section 13](./DESIGN.md#13-as-built-29-oct-2026) | Reviewer three-pane layout and map marker clustering not done; no real photos |
 | How it works page | Built | Explains the rules and weights; runs the beam vs greedy and ranked vs earliest-slot comparison live in the browser | Weights were tuned on the same eight cases |
 
 ## 3. Integrations
@@ -54,7 +55,8 @@ Credentials present in the local `.env` today: Gemini only.
 | End-to-end (Playwright) | 16 of 16 pass (8 desktop 1280 px, 8 mobile 375 px): group journey, invite and join across two tabs, open jio join and vote, privacy and evaluation page, overflow and console errors on every main route | `pnpm --dir client e2e` |
 | Algorithm evaluation | Beam matches or beats greedy on score in all 6 feasible cases; never breaks a hard rule; greedy keeps the least happy member happier in 1 | `pnpm --dir client evaluate` |
 | Pipeline live run | 88 posts fetched, 88 extracted by Gemini, 73 drafts written | `pipeline/.venv/bin/python pipeline/run.py --limit 15` |
-| Manual browser check | Group journey (lock slot, generate, swap, confirm, late join), open jio join and vote, solo plan, review and publish, Discover, How it works | Desktop and 375 px, light and dark |
+| Manual browser check | Group journey (lock slot, generate, swap, confirm, late join), open jio join and vote, solo plan, review and publish, Discover, How it works; after the redesign: create flow and slip, availability drag, Undo and keyboard, swap preview | Desktop and 375 px, light and dark |
+| Contrast | All text token pairs at least 4.5:1 in both themes; control borders at least 3:1 | Node script over the token values, see DESIGN.md section 13 |
 | Horizontal overflow at 375 px | None on any route after fixes | Checked by script in the browser |
 
 ## 5. Known issues and limits
@@ -85,7 +87,9 @@ In rough priority order:
 | Path | Contents |
 |---|---|
 | `client/src/views/` | Screens: sign in, home, new plan, hangout, join, Discover, profile, review, how it works, not found |
-| `client/src/components/` | Header, bottom nav, availability grid, time/plan/day-of panels, timeline, map, dialogs, cards |
+| `client/src/components/` | Header, bottom nav, availability grid, time/plan/day-of panels, timeline, map, dialogs, cards; `brand/` holds the Hawker Glow motifs |
+| `client/src/styles/` | Design tokens and base styles |
+| `.claude/skills/` | Design skills used for the redesign (frontend-design, impeccable, ui-ux-pro-max, taste-skill, web-design-guidelines, bencium UX designers, Vercel React guides) |
 | `client/src/lib/algo/` | `slots.js`, `itinerary.js`, `validity.js`, `reachability.js`, `discover.js`, `evaluate.js` |
 | `client/src/api/` | Demo store and data API |
 | `client/src/data/` | Sample listings, interests, areas and demo people |

@@ -51,9 +51,10 @@ watch(
     if (!tab.value || (prev && s !== prev)) tab.value = defaultTab()
   },
 )
-function go(t) {
-  tab.value = t
-  router.replace({ query: { ...route.query, tab: t, created: undefined } })
+async function go(t) {
+  // The time panel can block this when free times are unsaved.
+  const failure = await router.replace({ query: { ...route.query, tab: t, created: undefined } })
+  if (!failure) tab.value = t
 }
 const justCreated = computed(() => route.query.created === '1')
 
@@ -90,7 +91,7 @@ function onTabKey(e, i) {
             <span v-if="h.visibility === 'public'" class="tag tag-plum">Open jio</span>
           </div>
           <h1 class="m-0">{{ h.title }}</h1>
-          <p class="sub">{{ when }} · from {{ h.startArea.label }}</p>
+          <p class="sub tnum">{{ when }}, around {{ h.startArea.label }}</p>
           <p v-if="h.description" class="small muted m-0">{{ h.description }}</p>
           <div v-if="h.interests?.length" class="chip-row mt-2">
             <span v-for="i in h.interests" :key="i" class="tag">{{ interestLabel(i) }}</span>
@@ -143,23 +144,26 @@ function onTabKey(e, i) {
 
 <style scoped>
 .hhead { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; margin-bottom: 20px; flex-wrap: wrap; }
-.sub { color: var(--ink-2); margin: 8px 0 4px; font-weight: 550; }
+.sub { color: var(--ink-2); margin: 8px 0 4px; font-weight: 600; }
 .faces { display: flex; align-items: center; }
 .faces > * + * { margin-left: -8px; }
 .more { margin-left: 4px !important; font-size: 0.85rem; font-weight: 700; color: var(--ink-2); }
-.tabs { display: flex; gap: 4px; border-bottom: 1.5px solid var(--line); margin-bottom: 20px; overflow-x: auto; }
+.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin-bottom: 20px; overflow-x: auto; scrollbar-width: none; }
 .tabbtn {
   background: none;
   border: 0;
   border-bottom: 3px solid transparent;
+  min-height: 44px;
   padding: 10px 14px;
-  margin-bottom: -1.5px;
-  font-weight: 700;
-  color: var(--ink-3);
+  margin-bottom: -1px;
+  font-weight: 800;
+  font-family: var(--font-display);
+  color: var(--ink-2);
+  transition: color var(--oj-t-quick), border-color var(--oj-t-quick);
   white-space: nowrap;
 }
 .tabbtn:hover { color: var(--ink); }
-.tabbtn[aria-selected='true'] { color: var(--ink); border-bottom-color: var(--tomato); }
+.tabbtn[aria-selected='true'] { color: var(--tomato-ink); border-bottom-color: var(--tomato); }
 .layout { display: grid; gap: 24px; }
 .main-col { min-width: 0; }
 @media (min-width: 1100px) {

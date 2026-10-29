@@ -168,8 +168,10 @@ const better = (a, b, higher = true) => a != null && b != null && (higher ? a > 
   display: grid;
   place-items: center;
   background: var(--mustard);
-  border: 1.5px solid var(--line-strong);
-  font-weight: 800;
+  color: var(--on-accent);
+  border: 3px solid var(--paper);
+  font-family: var(--font-display);
+  font-weight: 900;
 }
 .step h2 { margin-bottom: 8px; }
 .step p { font-size: 0.95rem; }

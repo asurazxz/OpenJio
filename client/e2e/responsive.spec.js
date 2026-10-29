@@ -6,7 +6,7 @@ const IGNORED_ERRORS = /onemap|data\.gov\.sg|Failed to load resource/i
 async function signInAs(page, name) {
   await page.goto('/signin')
   await page.getByRole('button', { name }).click()
-  await expect(page.getByRole('heading', { level: 1, name: 'Your plans' })).toBeVisible()
+  await expect(page.getByRole('heading', { level: 1, name: /^(Kopi first|Free later|Jio makan), / })).toBeVisible()
 }
 
 async function checkRoutes(page, routes) {

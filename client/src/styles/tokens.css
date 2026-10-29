@@ -1,94 +1,162 @@
-/* OpenJio design tokens. Warm retro palette: cream paper, ink brown, tomato, mustard, teal. */
+/* OpenJio design tokens: Hawker Glow. Warm cream and charcoal surfaces, OpenJio orange,
+   teal for free time and Keep, pink for Swap, mango for recommendations.
+   Older token names (paper, ink, tomato, plum) are kept as aliases so components read the same. */
 :root {
-  --paper: #f7f0e3;
-  --paper-2: #efe4d0;
-  --card: #fffbf3;
-  --ink: #2a1f17;
-  --ink-2: #6b5a4b;
-  --ink-3: #9a8775;
-  --line: #e2d3bc;
-  --line-strong: #2a1f17;
+  --oj-bg: #FFF8F1;
+  --oj-bg-2: #FBEEE2;
+  --oj-surface: #FFFFFF;
+  --oj-primary: #FF6B35;
+  --oj-teal: #14B8A6;
+  --oj-mango: #F59E0B;
+  --oj-pink: #EC4899;
+  --oj-text: #1F2937;
+  /* Spec muted is #6B7280; darkened a step so it passes AA on the tinted fills too. */
+  --oj-muted: #636975;
+  --oj-subtle: #6B7280;
+  --oj-border: #E9DED3;
+  --oj-border-strong: #D6C4B3;
+  --oj-control-border: #A08A76;
+  --oj-orange-ink: #9A3412;
+  --oj-teal-ink: #115E59;
+  --oj-pink-ink: #9D174D;
+  --oj-mango-ink: #854D0E;
+  --oj-focus: #0F766E;
+  --oj-error: #B91C1C;
+  --oj-success: #166534;
+  --oj-orange-soft: #FFE6D9;
+  --oj-teal-soft: #D7F4EF;
+  --oj-mango-soft: #FDEFCB;
+  --oj-pink-soft: #FCE4F1;
+  --oj-error-soft: #FDE2E2;
+  --oj-on-fill: #26140A;
+  --oj-shadow-rgb: 36, 25, 17;
 
-  --tomato: #d9532b;
-  --tomato-ink: #a63a1a;
-  --tomato-soft: #f8dccd;
-  --mustard: #e8a93a;
-  --mustard-soft: #f9e7c2;
-  --teal: #2f7a6d;
-  --teal-soft: #d3e8e2;
-  --plum: #8a4f7d;
-  --plum-soft: #ecdbe7;
-  --sky: #4f7f9e;
-  --danger: #b3261e;
-  --danger-soft: #f7d9d6;
+  --oj-font-body: 'DM Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --oj-font-heading: 'Nunito', 'DM Sans', system-ui, sans-serif;
+  --oj-radius-card: 20px;
+  --oj-radius-control: 14px;
+  --oj-radius-sm: 10px;
 
-  --on-accent: #fffbf3;
-
-  --font-display: 'Fraunces', Georgia, 'Times New Roman', serif;
-  --font-body: 'DM Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
-
-  --radius-sm: 8px;
-  --radius: 14px;
-  --radius-lg: 22px;
-  --shadow-pop: 3px 3px 0 var(--line-strong);
-  --shadow-pop-lg: 5px 5px 0 var(--line-strong);
-  --shadow-soft: 0 1px 2px rgba(42, 31, 23, 0.06), 0 6px 18px rgba(42, 31, 23, 0.06);
-
-  --gutter: 16px;
-  --header-h: 64px;
-  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --oj-t-feedback: 100ms;
+  --oj-t-quick: 160ms;
+  --oj-t-standard: 240ms;
+  --oj-t-stamp: 220ms;
+  --oj-t-slip: 250ms;
+  --oj-t-story: 420ms;
+  --oj-t-celebrate: 480ms;
+  --oj-ease-out: cubic-bezier(.2, .8, .2, 1);
+  --oj-ease-stamp: cubic-bezier(.18, 1.35, .32, 1);
 
   color-scheme: light;
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
-    --paper: #1d1712;
-    --paper-2: #261e17;
-    --card: #2a221b;
-    --ink: #f3e8d6;
-    --ink-2: #c8b7a2;
-    --ink-3: #94826f;
-    --line: #43372c;
-    --line-strong: #0d0a07;
-    --tomato: #f07a4f;
-    --tomato-ink: #ffb08f;
-    --tomato-soft: #4a2a1e;
-    --mustard: #f0bb5a;
-    --mustard-soft: #46371c;
-    --teal: #5bb3a2;
-    --teal-soft: #1f3c36;
-    --plum: #c58ab8;
-    --plum-soft: #3d2838;
-    --sky: #8db8d4;
-    --danger: #ff8a80;
-    --danger-soft: #4a1f1c;
-    --on-accent: #1d1712;
+    --oj-bg: #1C1917;
+    --oj-bg-2: #231F1C;
+    --oj-surface: #292524;
+    --oj-primary: #FF8A5B;
+    --oj-teal: #2DD4BF;
+    --oj-mango: #FBBF24;
+    --oj-pink: #F472B6;
+    --oj-text: #FAFAF9;
+    --oj-muted: #A8A29E;
+    --oj-subtle: #A8A29E;
+    --oj-border: #57534E;
+    --oj-border-strong: #78716C;
+    --oj-control-border: #8A837D;
+    --oj-orange-ink: #FFB79A;
+    --oj-teal-ink: #99F6E4;
+    --oj-pink-ink: #FBCFE8;
+    --oj-mango-ink: #FDE68A;
+    --oj-focus: #5EEAD4;
+    --oj-error: #FCA5A5;
+    --oj-success: #86EFAC;
+    --oj-orange-soft: #43271B;
+    --oj-teal-soft: #173A36;
+    --oj-mango-soft: #3D3018;
+    --oj-pink-soft: #43202F;
+    --oj-error-soft: #45201F;
+    --oj-on-fill: #1C1917;
+    --oj-shadow-rgb: 0, 0, 0;
     color-scheme: dark;
   }
 }
 
 :root[data-theme='dark'] {
-  --paper: #1d1712;
-  --paper-2: #261e17;
-  --card: #2a221b;
-  --ink: #f3e8d6;
-  --ink-2: #c8b7a2;
-  --ink-3: #94826f;
-  --line: #43372c;
-  --line-strong: #0d0a07;
-  --tomato: #f07a4f;
-  --tomato-ink: #ffb08f;
-  --tomato-soft: #4a2a1e;
-  --mustard: #f0bb5a;
-  --mustard-soft: #46371c;
-  --teal: #5bb3a2;
-  --teal-soft: #1f3c36;
-  --plum: #c58ab8;
-  --plum-soft: #3d2838;
-  --sky: #8db8d4;
-  --danger: #ff8a80;
-  --danger-soft: #4a1f1c;
-  --on-accent: #1d1712;
+  --oj-bg: #1C1917;
+  --oj-bg-2: #231F1C;
+  --oj-surface: #292524;
+  --oj-primary: #FF8A5B;
+  --oj-teal: #2DD4BF;
+  --oj-mango: #FBBF24;
+  --oj-pink: #F472B6;
+  --oj-text: #FAFAF9;
+  --oj-muted: #A8A29E;
+  --oj-subtle: #A8A29E;
+  --oj-border: #57534E;
+  --oj-border-strong: #78716C;
+  --oj-control-border: #8A837D;
+  --oj-orange-ink: #FFB79A;
+  --oj-teal-ink: #99F6E4;
+  --oj-pink-ink: #FBCFE8;
+  --oj-mango-ink: #FDE68A;
+  --oj-focus: #5EEAD4;
+  --oj-error: #FCA5A5;
+  --oj-success: #86EFAC;
+  --oj-orange-soft: #43271B;
+  --oj-teal-soft: #173A36;
+  --oj-mango-soft: #3D3018;
+  --oj-pink-soft: #43202F;
+  --oj-error-soft: #45201F;
+  --oj-on-fill: #1C1917;
+  --oj-shadow-rgb: 0, 0, 0;
   color-scheme: dark;
+}
+
+/* Aliases used throughout the components. */
+:root {
+  --paper: var(--oj-bg);
+  --paper-2: var(--oj-bg-2);
+  --card: var(--oj-surface);
+  --ink: var(--oj-text);
+  --ink-2: var(--oj-muted);
+  --ink-3: var(--oj-subtle);
+  --line: var(--oj-border);
+  --line-strong: var(--oj-border-strong);
+  --line-control: var(--oj-control-border);
+
+  --tomato: var(--oj-primary);
+  --tomato-ink: var(--oj-orange-ink);
+  --tomato-soft: var(--oj-orange-soft);
+  --mustard: var(--oj-mango);
+  --mustard-ink: var(--oj-mango-ink);
+  --mustard-soft: var(--oj-mango-soft);
+  --teal: var(--oj-teal);
+  --teal-ink: var(--oj-teal-ink);
+  --teal-soft: var(--oj-teal-soft);
+  --plum: var(--oj-pink);
+  --plum-ink: var(--oj-pink-ink);
+  --plum-soft: var(--oj-pink-soft);
+  --sky: var(--oj-focus);
+  --danger: var(--oj-error);
+  --danger-soft: var(--oj-error-soft);
+  --success: var(--oj-success);
+
+  --on-accent: var(--oj-on-fill);
+
+  --font-display: var(--oj-font-heading);
+  --font-body: var(--oj-font-body);
+
+  --radius-sm: var(--oj-radius-sm);
+  --radius: var(--oj-radius-control);
+  --radius-lg: var(--oj-radius-card);
+  --shadow-soft: 0 1px 2px rgba(var(--oj-shadow-rgb), .04), 0 5px 20px rgba(var(--oj-shadow-rgb), .055);
+  --shadow-pop: 0 2px 4px rgba(var(--oj-shadow-rgb), .05), 0 10px 28px rgba(var(--oj-shadow-rgb), .09);
+  --shadow-pop-lg: 0 4px 8px rgba(var(--oj-shadow-rgb), .06), 0 18px 40px rgba(var(--oj-shadow-rgb), .12);
+
+  --gutter: 16px;
+  --header-h: 64px;
+  --nav-h: 68px;
+  --ease: var(--oj-ease-out);
 }

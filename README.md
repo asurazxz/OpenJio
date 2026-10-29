@@ -26,11 +26,11 @@ Credentials are optional. Without them the app uses estimated travel times, samp
 
 ## What to try
 
-1. As **Mei**, open "Saturday catch-up". Jun has not replied, so he counts as unknown, not free. Lock the best slot, generate a plan, swap a stop, then confirm.
+1. As **Mei**, open "Saturday catch-up". Jun has not replied, so he shows as "No reply", not free. Lock the best time, generate a plan, swap a stop (the sheet previews the new timings), then confirm.
 2. In another tab as **Farah**, vote on the stops. Votes appear in Mei's tab without a refresh.
 3. On the "On the day" tab, enter where you are leaving from and when, and get the first stop you can still reach.
 4. In Discover, filter by "Open jios" and join "Sunday Chinatown wander".
-5. Plan something solo from Home with "Plan for me".
+5. Plan something solo from Home with "Plan a free afternoon for yourself".
 6. As Mei (a reviewer), open **Review listings** from the account menu to check and publish drafts from the content pipeline.
 7. **How it works** shows the planning rules and a live comparison against simpler methods.
 
@@ -46,7 +46,7 @@ Credentials are optional. Without them the app uses estimated travel times, samp
 | `server/` | Express 5 server: OneMap token refresh, search and routing with a route cache, and the drafts feed. |
 | `pipeline/` | Python ingestion: public Telegram channel previews (Telethon for others), confirmgood.com; regex pre-parse and Gemini extraction into drafts for review. |
 | `supabase/migrations/` | Postgres schema with row level security for the hosted version. |
-| `docs/` | [STATUS.md](docs/STATUS.md) (current status), [IDEATION-PLAN.md](docs/IDEATION-PLAN.md) (scope and decisions), [SETUP-CREDENTIALS.md](docs/SETUP-CREDENTIALS.md), [EVALUATION.md](docs/EVALUATION.md). |
+| `docs/` | [STATUS.md](docs/STATUS.md) (current status), [IDEATION-PLAN.md](docs/IDEATION-PLAN.md) (scope and decisions), [DESIGN.md](docs/DESIGN.md) (Hawker Glow design spec and what was built), [SETUP-CREDENTIALS.md](docs/SETUP-CREDENTIALS.md), [EVALUATION.md](docs/EVALUATION.md). |
 
 ## Tests
 
@@ -75,4 +75,4 @@ Drafts go to `pipeline/out/drafts.json`. Nothing reaches Discover until a review
 - Public posts from the Telegram channels @sgfooddeals, @sgweekend, @sgconcerts, @dateideas and @sgstudentpromos, and articles from confirmgood.com. Listings link back to their source.
 - **Sample data**: the places are real public venues with approximate hours; events and deals in the sample are made up and labelled as sample data in the app.
 
-Libraries: Vue, Vue Router, Vite, Bootstrap, Leaflet, Express, Playwright, Requests, Beautiful Soup, Telethon. Fonts: Fraunces and DM Sans from Google Fonts.
+Libraries: Vue, Vue Router, Vite, Bootstrap, Leaflet, Express, Playwright, Requests, Beautiful Soup, Telethon. Fonts: Nunito and DM Sans from Google Fonts.

@@ -71,7 +71,7 @@ const canInvite = computed(() => h.value.mode !== 'solo' && !['ended', 'cancelle
         <div class="p-txt">
           <span class="p-name">{{ m.user.name }}<span v-if="m.userId === detail.me.userId" class="muted"> (you)</span></span>
           <span class="small muted">
-            {{ m.role === 'host' ? 'Host' : m.required ? 'Required' : 'Optional' }}<template v-if="h.stage === 'collecting'"> · {{ m.respondedAt ? 'replied' : 'not replied' }}</template>
+            {{ m.role === 'host' ? 'Host' : m.required ? 'Required' : 'Optional' }}<template v-if="h.stage === 'collecting'">, {{ m.respondedAt ? 'replied' : 'not replied' }}</template>
           </span>
         </div>
         <button
