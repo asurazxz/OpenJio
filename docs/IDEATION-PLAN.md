@@ -4,6 +4,8 @@
 > **Decided** = agreed with the team. **Proposed** = recommendation awaiting team agreement. **Open** = unresolved (see §13). Nothing here is assumed beyond what is marked.
 >
 > This branch is a standalone project. It does not depend on code, data or hosted services from any other branch.
+>
+> For what is built, tested and still missing, see [STATUS.md](./STATUS.md). This document holds scope and decisions.
 
 ## 0. Changelog
 
@@ -11,6 +13,7 @@
 |---|---|---|
 | 26 Oct 2026 | Initial ideation doc on branch `revamp/ideate` | Huxley |
 | 28 Oct 2026 | Product name set to **OpenJio** (decided); build order added | Huxley |
+| 29 Oct 2026 | First build of R1 to R6 in demo mode (browser data store with the same async API a Supabase adapter will use). Local Express server for OneMap routing and drafts; Python pipeline with Gemini extraction; Supabase migration written but not deployed. Discover, plan generation, voting, late join, open jios, review queue and evaluation page working | Huxley |
 | 29 Oct 2026 | Made standalone (no reuse of other branches). Scope cut to the outing-planning journey: structured events, check-in and organiser ops removed (decided). Features regrouped as R1 to R6, with open jios added to R2. Added planning rules, data model, tier mapping, evaluation method, ingestion quality process, milestones and acceptance cases | Huxley |
 
 ---
@@ -309,6 +312,8 @@ Everything is built fresh on this branch.
 | `ingest_runs`, `extraction_labels` | ingestion bookkeeping and the hand-labelled evaluation set |
 | `route_cache` | from_lat, from_lng, to_lat, to_lng, mode, departure_hour, duration_mins, fetched_at |
 
+As built (`supabase/migrations/20261029000000_init.sql`): places, events and deals share one `listings` table with a `type` column (plus `deal_outlets`), alternatives are computed on request rather than stored, and a `shortlist` table holds group suggestions. Raw availability rows are private to their owner; members see a `hangout_heatmap()` aggregate.
+
 RLS: hangout data visible to members only; public hangouts readable by all signed-in users; only the host changes stage and itinerary; only reviewers publish listings. Write as one initial migration.
 
 ---
@@ -376,15 +381,17 @@ Add Google Calendar or more sources only after M2. Test continuously; M4 consoli
 
 ### 12.4 Tracker
 
+Detailed status, verification and known issues are in [STATUS.md](./STATUS.md).
+
 | Item | Owner | Branch | Status | Notes |
 |---|---|---|---|---|
-| Foundation (scaffold, Supabase, auth, migration, seed) | Open | | Not started | M1 |
-| R1 Discover | Open | | Not started | |
-| R2 Hangouts, voting, open jios | Open | | Not started | |
-| R3 Availability | Open | | Not started | |
-| R4 Itinerary builder | Open | | Not started | Critical path |
-| R5 Companion + routing module | Open | | Not started | |
-| R6 Content pipeline | Open | | Not started | Quality spike in M1 |
+| Foundation (scaffold, Supabase, auth, migration, seed) | Open | revamp/ideate | Demo mode built | Supabase project not created; migration in `supabase/migrations/` |
+| R1 Discover | Open | revamp/ideate | Built | Ranking, filters, map, source labels |
+| R2 Hangouts, voting, open jios | Open | revamp/ideate | Built | Invite links, versioned votes, confirm, open jios |
+| R3 Availability | Open | revamp/ideate | Built | Grid, ranked slots, optional Google Calendar import |
+| R4 Itinerary builder | Open | revamp/ideate | Built | Beam search, greedy baseline, swaps, manual build |
+| R5 Companion + routing module | Open | revamp/ideate | Built | Late join, NEA weather, OneMap server (needs credentials) |
+| R6 Content pipeline | Open | revamp/ideate | Built | Gemini extraction, review queue; labelled set still empty |
 | UI system / consistency | Open | | Not started | |
 
 ---
@@ -394,7 +401,7 @@ Add Google Calendar or more sources only after M2. Test continuously; M4 consoli
 1. Can the team agree to the R1 to R6 boundaries, limits and proposed ownership?
 2. What is the actual submission date and integration freeze date?
 3. Who owns the Telegram account (Telethon) and the Google Cloud OAuth project?
-4. Server logic: small Express server or Supabase Edge Functions?
+4. Server logic: small Express server or Supabase Edge Functions? (Built as a local Express server for now; slot ranking and generation run in the data layer so they can move to Edge Functions.)
 5. Is signed-in membership with host-controlled publication acceptable for the first release (no guests)?
 6. Open jios: is a hard capacity with no waitlist enough?
 7. Who owns the source-quality spike and the routing spike in M1?

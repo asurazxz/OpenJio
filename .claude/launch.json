@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "client-demo",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--dir", "client", "dev"],
+      "port": 5173
+    },
+    {
+      "name": "api-server",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--dir", "server", "dev"],
+      "port": 8787
+    }
+  ]
+}

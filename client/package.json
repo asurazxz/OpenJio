@@ -1,0 +1,33 @@
+{
+  "name": "openjio-client",
+  "version": "0.1.0",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "node --test tests/*.test.mjs",
+    "evaluate": "node scripts/evaluate.mjs",
+    "e2e": "playwright test"
+  },
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "12.16.1",
+      "onFail": "download"
+    }
+  },
+  "packageManager": "pnpm@12.16.1",
+  "type": "module",
+  "dependencies": {
+    "bootstrap": "^5.3.8",
+    "leaflet": "^1.9.4",
+    "vue": "^3.5.44",
+    "vue-router": "^5.4.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.64.1",
+    "@vitejs/plugin-vue": "^6.0.10",
+    "vite": "^8.3.5"
+  },
+  "private": true
+}

@@ -1,0 +1,14 @@
+node_modules/
+dist/
+.env
+.env.*
+!.env.example
+*.log
+.DS_Store
+__pycache__/
+.venv/
+*.session
+pipeline/out/
+server/.cache/
+test-results/
+playwright-report/

@@ -1,0 +1,94 @@
+/* OpenJio design tokens. Warm retro palette: cream paper, ink brown, tomato, mustard, teal. */
+:root {
+  --paper: #f7f0e3;
+  --paper-2: #efe4d0;
+  --card: #fffbf3;
+  --ink: #2a1f17;
+  --ink-2: #6b5a4b;
+  --ink-3: #9a8775;
+  --line: #e2d3bc;
+  --line-strong: #2a1f17;
+
+  --tomato: #d9532b;
+  --tomato-ink: #a63a1a;
+  --tomato-soft: #f8dccd;
+  --mustard: #e8a93a;
+  --mustard-soft: #f9e7c2;
+  --teal: #2f7a6d;
+  --teal-soft: #d3e8e2;
+  --plum: #8a4f7d;
+  --plum-soft: #ecdbe7;
+  --sky: #4f7f9e;
+  --danger: #b3261e;
+  --danger-soft: #f7d9d6;
+
+  --on-accent: #fffbf3;
+
+  --font-display: 'Fraunces', Georgia, 'Times New Roman', serif;
+  --font-body: 'DM Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+
+  --radius-sm: 8px;
+  --radius: 14px;
+  --radius-lg: 22px;
+  --shadow-pop: 3px 3px 0 var(--line-strong);
+  --shadow-pop-lg: 5px 5px 0 var(--line-strong);
+  --shadow-soft: 0 1px 2px rgba(42, 31, 23, 0.06), 0 6px 18px rgba(42, 31, 23, 0.06);
+
+  --gutter: 16px;
+  --header-h: 64px;
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --paper: #1d1712;
+    --paper-2: #261e17;
+    --card: #2a221b;
+    --ink: #f3e8d6;
+    --ink-2: #c8b7a2;
+    --ink-3: #94826f;
+    --line: #43372c;
+    --line-strong: #0d0a07;
+    --tomato: #f07a4f;
+    --tomato-ink: #ffb08f;
+    --tomato-soft: #4a2a1e;
+    --mustard: #f0bb5a;
+    --mustard-soft: #46371c;
+    --teal: #5bb3a2;
+    --teal-soft: #1f3c36;
+    --plum: #c58ab8;
+    --plum-soft: #3d2838;
+    --sky: #8db8d4;
+    --danger: #ff8a80;
+    --danger-soft: #4a1f1c;
+    --on-accent: #1d1712;
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme='dark'] {
+  --paper: #1d1712;
+  --paper-2: #261e17;
+  --card: #2a221b;
+  --ink: #f3e8d6;
+  --ink-2: #c8b7a2;
+  --ink-3: #94826f;
+  --line: #43372c;
+  --line-strong: #0d0a07;
+  --tomato: #f07a4f;
+  --tomato-ink: #ffb08f;
+  --tomato-soft: #4a2a1e;
+  --mustard: #f0bb5a;
+  --mustard-soft: #46371c;
+  --teal: #5bb3a2;
+  --teal-soft: #1f3c36;
+  --plum: #c58ab8;
+  --plum-soft: #3d2838;
+  --sky: #8db8d4;
+  --danger: #ff8a80;
+  --danger-soft: #4a1f1c;
+  --on-accent: #1d1712;
+  color-scheme: dark;
+}
