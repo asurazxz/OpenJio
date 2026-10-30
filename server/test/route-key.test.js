@@ -34,22 +34,22 @@ describe('routeKey', () => {
       routeKey({ from: A, to: B, mode: 'walk', depart: d }));
   });
 
-  test('depart hour is taken in Singapore time', () => {
+  test('depart minute is taken in Singapore time', () => {
     // 15:30 UTC is 23:30 in Singapore (UTC+8)
     const key = routeKey({ from: A, to: B, mode: 'pt', depart: new Date('2026-01-01T15:30:00Z') });
-    assert.ok(key.endsWith('|pt|2026-01-01T23'), key);
+    assert.ok(key.endsWith('|pt|2026-01-01T23:30'), key);
   });
 
   test('crossing Singapore midnight changes the day and hour', () => {
     // 16:10 UTC is 00:10 on 2026-01-02 in Singapore
     const key = routeKey({ from: A, to: B, mode: 'pt', depart: new Date('2026-01-01T16:10:00Z') });
-    assert.ok(key.endsWith('|pt|2026-01-02T00'), key);
+    assert.ok(key.endsWith('|pt|2026-01-02T00:10'), key);
   });
 
-  test('minutes within the same SG hour share a key', () => {
+  test('different departure minutes in one SG hour get separate keys', () => {
     const a = routeKey({ from: A, to: B, mode: 'pt', depart: new Date('2026-01-01T01:05:00Z') });
     const b = routeKey({ from: A, to: B, mode: 'pt', depart: new Date('2026-01-01T01:55:00Z') });
-    assert.equal(a, b);
+    assert.notEqual(a, b);
   });
 });
 

@@ -1,6 +1,6 @@
 # Project status
 
-Last updated: 29 Oct 2026. Branch: `revamp/ideate`.
+Last updated: 30 Oct 2026 (backend hardening; flexible planning, Geoapify and credential checks; older baseline entries retain their earlier verification dates). Branch: `revamp/ideate`.
 
 This is the single place to check where OpenJio stands: what works, how it was checked, what is missing, and what to do next. Scope and decisions live in [IDEATION-PLAN.md](./IDEATION-PLAN.md); visual design in [DESIGN.md](./DESIGN.md); algorithm results in [EVALUATION.md](./EVALUATION.md); credentials in [SETUP-CREDENTIALS.md](./SETUP-CREDENTIALS.md).
 
@@ -10,7 +10,7 @@ This is the single place to check where OpenJio stands: what works, how it was c
 |---|---|
 | Stage | First build of all six areas (R1 to R6), running in **demo mode** |
 | Runs locally | Yes: `pnpm --dir client dev`, optional `pnpm --dir server dev` |
-| Hosted backend | Not yet. Supabase migration written but never applied; no project created |
+| Hosted backend | Not yet. Migrations applied only to a temporary local Postgres; no hosted Supabase project is connected |
 | Deployed app | No |
 | Committed | Yes, on `revamp/ideate`, pushed to origin |
 | Deadline | Unknown (open question 2 in the plan) |
@@ -23,8 +23,8 @@ This is the single place to check where OpenJio stands: what works, how it was c
 |---|---|---|---|
 | R1 Discover | Built | Ranked feed (interest, distance, fits-your-time, freshness, diversity pass); filters by type, interest, area, time or a hangout's slot; list and map; detail dialog with hours, deal validity, conditions and source; add to a hangout's shortlist | Scraped listings published from review have no opening hours, so they are never auto-scheduled |
 | R2 Hangouts, voting, open jios | Built | Create group, solo or open jio; invite links with safe preview; join, leave, required members; stages collecting, voting, final, ended, cancelled; votes tied to stop versions; host swap, reorder, remove, add; confirm with validation; edits after confirming reopen voting with a banner; open jios with capacity | No editing of title, dates or area after creation; no guest (signed-out) joining by design |
-| R3 Availability | Built | Paintable 30-minute grid (mouse drag, tap, keyboard, per-day quick fill); slot ranking with required members, unknown non-responders, conservative rounding, deterministic ties; aggregate heatmap only; Google Calendar free/busy import that subtracts clashes from marked hours | Calendar import untested (no OAuth client yet) |
-| R4 Itinerary builder | Built | Beam search with hard checks (hours, event times, deal validity, travel, slot end, meal windows, no back-to-back meals); greedy baseline; plain-language reasons; per-stop alternatives that keep the plan feasible; manual build with fit check; diagnosis and one-click relaxations when nothing fits | Travel is estimated unless OneMap credentials are set; stops can sit up to about 6 km from the start area |
+| R3 Availability | Built | Paintable 30-minute grid (mouse drag, tap, keyboard, per-day quick fill); slot ranking with required members, unknown non-responders, conservative rounding, deterministic ties; aggregate heatmap; editable recommendations with attendance preview; large overlap comparison dialog | Manual grid only; Google Calendar excluded from submission scope |
+| R4 Itinerary builder | Built | Beam search with hard checks (hours, event times, deal validity, travel, slot end, meal windows, no back-to-back meals); greedy baseline; plain-language reasons; per-stop alternatives that keep the plan feasible; manual build with fit check, private custom places and drag-to-reorder; diagnosis and one-click relaxations when nothing fits | Travel is estimated unless OneMap credentials are set; stops can sit up to about 6 km from the start area |
 | R5 Outing companion | Built | Final timeline and map; late-join suggestion using travel time and minimum overlap, with clear no-match reasons; NEA two-hour forecast near the start area | Weather is the current forecast, not the outing date's; host timing updates deferred |
 | R6 Content pipeline | Built | Fetches confirmgood.com JSON and five Telegram channel previews; regex pre-parse plus Gemini extraction; dedupe by composite source id; drafts kept separate from published; reviewer queue with edit, publish, reject and unpublish | Hand-labelled accuracy set is empty, so extraction accuracy is not measured; Telethon untested |
 | Visual design (Hawker Glow) | Built | Tokens, Nunito and DM Sans, light and dark, brand motifs (wordmark, washi headings, Keep/Swap stamps, Jio Slip, route legs), stepped create flow, phone day-list availability with modes and Undo, ranked time cards, swap sheet with timing preview, late-join card. Details and departures in [DESIGN.md section 13](./DESIGN.md#13-as-built-29-oct-2026) | Reviewer three-pane layout and map marker clustering not done; no real photos |
@@ -40,12 +40,34 @@ This is the single place to check where OpenJio stands: what works, how it was c
 | Gemini extraction | `pipeline/extract.py` | Working | Key is set in `.env`. Model `gemini-3.5-flash-lite` (the older default was retired). Calls are paced and retried on 429 |
 | Telegram previews (`t.me/s`) | `pipeline/sources.py` | Working | Occasional read timeouts on @dateideas, reported and skipped |
 | Telethon | `pipeline/sources.py`, `pipeline/telegram_login.py` | Untested | Needs a dedicated account and session string |
-| Google Calendar free/busy | `client/src/components/CalendarImport.vue` | Untested | Button only appears when `VITE_GOOGLE_CLIENT_ID` is set |
-| Supabase | `supabase/migrations/20261029000000_init.sql` | Written, not applied | 17 tables, RLS on all, 35 policies, member-only heatmap function, version-bump trigger. Only checked structurally (no local Postgres or Docker daemon available) |
+| Geoapify Free | `server/src/places.js`, `client/src/components/CustomPlaceForm.vue` | Live search/details and cache verified | Peranakan Museum returned; Nirvana Dessert Cafe did not. Cached Singapore lookup and manual fallback; setup in SETUP-CREDENTIALS.md |
+| Google Calendar | Removed from submission scope (30 Oct 2026) | Not required | Availability uses the manual grid |
+| Supabase | `supabase/migrations/` | Applied locally, not hosted | Four migrations: schema with RLS on every table, the trusted snapshot/commit RPCs, itinerary-scoped custom places, and profile privacy. The first three were exercised in a temporary local Postgres; the profile privacy migration has not been run yet |
 
-Credentials present in the local `.env` today: Gemini only.
+Credential presence checked on 30 Oct 2026: OneMap email/password, Gemini API key and Geoapify API key are set in the local `.env`. Geoapify search/details and cache reuse were verified live; this is not a new live OneMap or Gemini verification.
 
 ## 4. Verification
+
+### Flexible planning checkpoint — 30 Oct 2026
+
+- Client suite: **87 passed**. Server suite: **33 passed, 1 optional Docker SQL test skipped**. Production build passed.
+- Browser checks: **32 passed**, across desktop and phone: place search/details, missing-provider and manual fallback, stale place/address responses, persisted private places, drag/keyboard/position reordering, edited slot validation, overlap day selection, original group journey, plan corrections and responsive routes.
+- All three migrations applied to a temporary local Postgres runtime. Custom stops survived independent hosted requests and reordering; public Discover isolation and service-role-only RPC grants passed. No hosted database was changed.
+- Live Geoapify returned Peranakan Museum with website and reported hours. A repeated search/details lookup left the provider-call counter unchanged. Nirvana Dessert Cafe was not returned, so manual entry is required for that example.
+- Desktop and phone overlap layouts checked visually, with no horizontal overflow.
+
+### Backend hardening — 30 Oct 2026
+
+- In shared mode, `/api/route` and `/api/geocode` require a signed-in caller. All provider endpoints are rate limited per client. Set `TRUST_PROXY` when running behind a hosting proxy so limits apply per visitor.
+- The route cache is keyed by departure minute (matching the client), holds at most 5,000 entries and drops entries older than 30 days. A OneMap 401 is retried once with a fresh token.
+- Publishing loads the pipeline's own draft by id. Reviewer corrections apply only to the editable fields; source, raw post and id come from the pipeline. The server now passes drafts to the engine as a list, which hosted review needed.
+- Viewing an ended or cancelled plan no longer rewrites its timings.
+- Custom start areas must be labelled Singapore coordinates. Hangout interests and profile home areas must be known values.
+- New migration `20261030120000_profile_privacy.sql`: a person reads only their own profile and those of people they share a hangout with.
+- The pipeline marks re-extracted posts with `sourceEditedAt`. A published or rejected review that predates the edit is withdrawn and the draft returns to the review queue.
+- Checks: client 93 passed; server 38 passed and 1 optional Docker SQL test skipped; pipeline 9 passed; production build passed. The SQL test now covers profile visibility, but Docker was not running, so neither it nor the new migration was executed.
+
+The earlier baseline checks below are retained for context.
 
 | Check | Result | How to run |
 |---|---|---|
@@ -68,19 +90,18 @@ Credentials present in the local `.env` today: Gemini only.
 5. **Weights are tuned on the evaluation cases**, so the comparison favours the beam search more than an independent test set would.
 6. **The alternatives dialog** takes about a second, because each option re-times the whole plan.
 7. **Published scraped listings** have no opening hours, so they only enter plans by hand and show an "hours unknown" warning, which does not block confirming.
-8. **Migration never executed.** It may contain SQL errors. Invite-link joins need a security definer join function that is not written yet (the migration only lets users join public hangouts directly).
+8. **Hosted rollout remains pending.** The schema and new custom-stop migration were applied and exercised in local Postgres at the checkpoint above; live Supabase deployment and multi-account validation remain separate work.
 9. **OneMap search token requirement** comes from the recommendation document and has not been checked against the live API.
 
 ## 6. Next steps
 
 In rough priority order:
 
-1. Add OneMap credentials and confirm live search and routing (`/api/health` shows `"onemap": "ok"`).
+1. Confirm live OneMap search and routing with the configured credentials (`/api/health` shows `"onemap": "ok"`).
 2. Label 30 to 50 posts in `pipeline/labels/labels.json` and run `pipeline/evaluate.py` to measure extraction accuracy.
 3. Apply the migration to a local Postgres or a Supabase branch and fix any errors, add the invite-join function, run Supabase advisors, then write a live adapter for `client/src/api/` with real auth.
-4. Create the Google OAuth client and test calendar import with test users.
-5. Settle the open questions in the plan (deadline, ownership, limits) and assign owners in its tracker.
-6. Deploy the client and server.
+4. Settle the open questions in the plan (deadline, ownership, limits) and assign owners in its tracker.
+5. Deploy the client and server.
 
 ## 7. Where things are
 

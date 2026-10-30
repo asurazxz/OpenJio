@@ -100,7 +100,7 @@ async function join() {
             </template>
             <RouterLink to="/discover" class="btn btn-ghost">Not now</RouterLink>
           </div>
-          <p class="small muted mt-3 mb-0">Joining shares your name with the group. Your free times are only shown as totals.</p>
+          <p class="small muted mt-3 mb-0">Joining shares your name with the group. Members see overlap totals and who can attend suggested times. Your individual availability grid is never shown.</p>
         </template>
       </JioSlip>
     </template>

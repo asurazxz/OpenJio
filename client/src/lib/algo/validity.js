@@ -8,7 +8,7 @@ import { dayKey, dayCode, minutesOfDay, parseHHMM, sgDateKey, sgStartOfDay, toMs
  * false if it does not, null if hours are unknown.
  */
 export function isOpenDuring(openingHours, startMs, endMs) {
-  if (!openingHours) return null
+  if (!openingHours || !Object.hasOwn(openingHours, dayKey(startMs))) return null
   if (sgDateKey(startMs) !== sgDateKey(endMs - 1)) return false
   const windows = openingHours[dayKey(startMs)] || []
   const s = minutesOfDay(startMs)
@@ -37,7 +37,7 @@ export function isDealValidDuring(validity, startMs, endMs) {
 
 /** A deal counts as verified only when its source has a verification time and it is published. */
 export function isVerifiedDeal(listing) {
-  return listing.type === 'deal' && Boolean(listing.source?.verifiedAt) && listing.status !== 'draft'
+  return listing.type === 'deal' && listing.routeReady !== false && Boolean(listing.source?.verifiedAt) && listing.status !== 'draft'
 }
 
 /**
@@ -61,6 +61,17 @@ export function scheduleAt(listing, arriveMs) {
     if (end - start < 30 * MIN) return { ok: false, reason: 'Open jio already over' }
     return { ok: true, start, end, waitMins: Math.round((start - arriveMs) / MIN) }
   }
+  const day = sgStartOfDay(arriveMs)
+  const candidates = [arriveMs, ...(listing.openingHours?.[dayKey(arriveMs)] || []).map(([open]) => day + parseHHMM(open) * MIN)]
+  if (listing.type === 'deal') {
+    candidates.push(...(listing.validity?.timeWindows || []).map((w) => day + parseHHMM(w.start) * MIN))
+  }
+  for (const start of [...new Set(candidates)].filter((t) => t >= arriveMs).sort((a, b) => a - b)) {
+    const end = start + dur
+    if (!isOpenDuring(listing.openingHours, start, end)) continue
+    if (listing.type === 'deal' && !isDealValidDuring(listing.validity, start, end)) continue
+    return { ok: true, start, end, waitMins: Math.round((start - arriveMs) / MIN) }
+  }
   const start = arriveMs
   const end = start + dur
   const open = isOpenDuring(listing.openingHours, start, end)
@@ -74,16 +85,9 @@ export function scheduleAt(listing, arriveMs) {
 
 /** Is a listing usable at some point between startMs and endMs (for Discover filters)? */
 export function availableInWindow(listing, startMs, endMs) {
-  if (listing.type === 'event' || listing.type === 'hangout') {
-    const s = toMs(listing.startsAt)
-    const e = toMs(listing.endsAt)
-    return s < endMs && e > startMs
-  }
-  const step = 30 * MIN
-  const dur = Math.min((listing.durationMins || 60) * MIN, endMs - startMs)
-  for (let t = startMs; t + dur <= endMs; t += step) {
+  for (let t = startMs; t < endMs; t = sgStartOfDay(t) + 24 * 60 * MIN) {
     const r = scheduleAt(listing, t)
-    if (r.ok) return true
+    if (r.ok && r.end <= endMs) return true
   }
   return false
 }

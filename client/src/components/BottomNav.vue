@@ -23,6 +23,7 @@ function isActive(key) {
     <RouterLink
       v-for="i in items"
       :key="i.key"
+      :data-tour="i.key === 'new' ? 'nav-create' : undefined"
       :to="i.to"
       class="tab"
       :class="{ active: isActive(i.key), primary: i.primary }"

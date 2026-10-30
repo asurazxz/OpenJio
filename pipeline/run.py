@@ -9,6 +9,7 @@ from pathlib import Path
 import env  # noqa: F401  (loads ../.env)
 import extract
 import sources
+from draft_store import apply_draft
 
 PIPELINE_DIR = Path(__file__).resolve().parent
 OUT_DIR = PIPELINE_DIR / "out"
@@ -108,19 +109,19 @@ def run(args):
 
     drafts = read_json(DRAFTS_PATH, {})
     by_extractor = {"gemini": 0, "regex": 0}
-    written, kept_reviewed, dropped_other = [], 0, 0
+    written, edited, dropped_other, retired = [], 0, 0, 0
     for key in new_keys + edited_keys:
         draft = extract.build_draft(raw_store[key])
         by_extractor[draft["extractor"]] += 1
-        if draft["type"] == "other":
+        action = apply_draft(drafts, draft)
+        if action == "dropped_other":
             dropped_other += 1
-            continue
-        existing = drafts.get(draft["id"])
-        if existing and existing.get("status") != "draft":
-            kept_reviewed += 1  # a human has already reviewed this one
-            continue
-        drafts[draft["id"]] = draft
-        written.append(draft)
+        elif action == "retired":
+            retired += 1
+        else:
+            if action == "edited":
+                edited += 1
+            written.append(draft)
 
     stale_other = [d_id for d_id, d in drafts.items()
                    if d.get("type") == "other" and d.get("status") == "draft"]
@@ -139,7 +140,8 @@ def run(args):
     print(f"  raw posts: {len(new_keys)} new, {len(edited_keys)} edited, {len(raw_store)} stored")
     print(f"  extracted: {extracted} (gemini {by_extractor['gemini']}, regex {by_extractor['regex']})")
     print(f"  drafts written: {len(written)} (drafts.json now holds {len(drafts)})")
-    print(f"  dropped as other: {dropped_other}; reviewed drafts left untouched: {kept_reviewed}")
+    print(f"  retired after source changed to other: {retired}")
+    print(f"  dropped as other: {dropped_other}; edited drafts sent back for review: {edited}")
     print(f"  written drafts with null outlet name: {null_outlet} of {len(written)}")
     print(f"  written drafts with null dateFrom: {null_dates} of {len(written)}")
     if errors:
@@ -162,7 +164,8 @@ def run(args):
         "draftsWritten": len(written),
         "draftsTotal": len(drafts),
         "droppedOther": dropped_other,
-        "keptReviewed": kept_reviewed,
+        "retired": retired,
+        "editedForReview": edited,
         "nullOutlet": null_outlet,
         "nullDate": null_dates,
         "errors": errors,

@@ -96,7 +96,7 @@ export function buildPool(candidates, ctx) {
 
 /** Try appending a listing to a partial plan. Returns the new stop or null. */
 function extend(state, listing, ctx) {
-  const leg = ctx.travel(state.pos, listing)
+  const leg = ctx.travel(state.pos, listing, state.time)
   const arrive = state.time + leg.mins * MIN
   const sched = scheduleAt(listing, arrive)
   if (!sched.ok) return null
@@ -195,7 +195,7 @@ export function generateItinerary(input) {
   return finalize(complete[0].stops, ctx, 'beam')
 }
 
-/** Baseline: repeatedly take the feasible stop with the highest group interest. Ignores meals and travel cost. */
+/** Baseline: repeatedly take the feasible stop with the highest group interest. */
 export function greedyItinerary(input, pool = null) {
   const ctx = makeCtx(input)
   const candidates = pool || buildPool(input.candidates, ctx)
@@ -215,7 +215,7 @@ export function greedyItinerary(input, pool = null) {
     state.pos = best.stop.listing
     state.ids.add(best.stop.listingId)
   }
-  if (state.stops.length < ctx.options.minStops) {
+  if (state.stops.length < ctx.options.minStops || !mealsSatisfied(state.stops, ctx)) {
     return { ok: false, method: 'greedy', stops: state.stops, ...diagnose(candidates, ctx, input.candidates) }
   }
   return finalize(state.stops, ctx, 'greedy')
@@ -232,7 +232,7 @@ export function retime(listings, input) {
   let time = ctx.slot.start
   let pos = ctx.start
   listings.forEach((listing, index) => {
-    const leg = ctx.travel(pos, listing)
+    const leg = ctx.travel(pos, listing, time)
     const arrive = time + leg.mins * MIN
     const sched = scheduleAt(listing, arrive)
     const start = sched.start ?? arrive

@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { isOpenDuring, isDealValidDuring, scheduleAt } from '../src/lib/algo/validity.js'
-import { sgTime } from '../src/lib/time.js'
+import { sgTime, MIN } from '../src/lib/time.js'
 
 const sat = (h, m = 0) => sgTime(2026, 11, 14, h, m)
 const hours = { mon: [], tue: [['10:00', '22:00']], wed: [['10:00', '22:00']], thu: [['10:00', '22:00']], fri: [['10:00', '22:00']], sat: [['11:00', '15:00'], ['17:00', '23:59']], sun: [] }
@@ -34,4 +34,25 @@ test('events schedule inside their own times', () => {
   assert.equal(r.start, sat(15))
   assert.equal(r.waitMins, 30)
   assert.equal(scheduleAt(ev, sat(17, 45)).ok, false)
+})
+
+test('a place can wait ten minutes for opening while preserving full duration', () => {
+  const r = scheduleAt({ type: 'place', openingHours: hours, durationMins: 60 }, sat(10, 50))
+  assert.equal(r.ok, true)
+  assert.equal(r.start, sat(11))
+  assert.equal(r.end, sat(12))
+  assert.equal(r.waitMins, 10)
+})
+
+test('discovery only offers visits that fit completely inside the requested window', async () => {
+  const { availableInWindow } = await import('../src/lib/algo/validity.js')
+  assert.equal(availableInWindow({ type: 'place', openingHours: hours, durationMins: 60 }, sat(12), sat(12, 30)), false)
+  assert.equal(availableInWindow({ type: 'place', openingHours: hours, durationMins: 60 }, sat(10, 50), sat(12)), true)
+})
+
+
+test('an unverified weekday stays unknown rather than being marked closed', () => {
+  const time = sgTime(2026, 11, 14, 12)
+  assert.equal(isOpenDuring({ mon: [['09:00', '18:00']] }, time, time + 30 * MIN), null)
+  assert.equal(isOpenDuring({ sat: [] }, time, time + 30 * MIN), false)
 })

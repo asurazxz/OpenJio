@@ -19,7 +19,7 @@ const lines = [
   '',
   '## Itinerary generation: beam search vs greedy baseline',
   '',
-  'Greedy repeatedly takes the feasible next stop with the highest average group interest, ignoring travel cost and meal coverage. Both use the same candidate pool and hard checks. "Rule breaks" are issues found by re-validating the final plan.',
+  'Greedy repeatedly takes the feasible next stop with the highest average group interest, without optimising the combined travel/group-fairness score. Both methods reject plans missing a required meal. Both use the same candidate pool and hard checks. "Rule breaks" are issues found by re-validating the final plan.',
   '',
   '| Case | Method | Stops | Rule breaks | Travel (min) | Avg interest | Least happy | Score | Runtime (ms) |',
   '|---|---|---|---|---|---|---|---|---|',

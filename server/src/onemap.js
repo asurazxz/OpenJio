@@ -70,11 +70,17 @@ export async function getToken() {
   return inflight;
 }
 
-async function getJson(url, token) {
-  const res = await send(url, { headers: { Authorization: token } });
+// A token can be revoked before its stated expiry, so a 401 gets one retry
+// with a fresh token before the request fails.
+async function getJson(url) {
+  let res = await send(url, { headers: { Authorization: await getToken() } });
   if (res.status === 401) {
-    tokenState = null; // force a fresh token on the next call
-    throw fail('onemap_error', 'OneMap rejected the token');
+    tokenState = null;
+    res = await send(url, { headers: { Authorization: await getToken() } });
+    if (res.status === 401) {
+      tokenState = null;
+      throw fail('onemap_error', 'OneMap rejected the token');
+    }
   }
   if (!res.ok) throw fail('onemap_error', `OneMap returned ${res.status}`);
   try {
@@ -85,14 +91,13 @@ async function getJson(url, token) {
 }
 
 export async function search(q) {
-  const token = await getToken();
   const params = new URLSearchParams({
     searchVal: q,
     returnGeom: 'Y',
     getAddrDetails: 'Y',
     pageNum: '1',
   });
-  const data = await getJson(`${SEARCH_URL}?${params}`, token);
+  const data = await getJson(`${SEARCH_URL}?${params}`);
   const results = Array.isArray(data?.results) ? data.results : [];
   return results
     .slice(0, SEARCH_LIMIT)
@@ -107,7 +112,6 @@ export async function search(q) {
 
 // Returns { durationMins, mode, source }. Throws onemap_error if no duration.
 export async function route({ from, to, mode, depart }) {
-  const token = await getToken();
   const params = new URLSearchParams({
     start: `${from.lat},${from.lng}`,
     end: `${to.lat},${to.lng}`,
@@ -121,11 +125,11 @@ export async function route({ from, to, mode, depart }) {
     params.set('time', `${p.hour}:${p.minute}:${p.second}`);
     params.set('maxWalkDistance', '1000');
     params.set('numItineraries', '1');
-    const data = await getJson(`${ROUTE_URL}?${params}`, token);
+    const data = await getJson(`${ROUTE_URL}?${params}`);
     seconds = data?.plan?.itineraries?.[0]?.duration;
   } else if (mode === 'walk') {
     params.set('routeType', 'walk');
-    const data = await getJson(`${ROUTE_URL}?${params}`, token);
+    const data = await getJson(`${ROUTE_URL}?${params}`);
     seconds = data?.route_summary?.total_time;
   } else {
     throw new Error(`Unsupported route mode: ${mode}`);

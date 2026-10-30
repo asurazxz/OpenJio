@@ -10,7 +10,7 @@ export const DISCOVER_WEIGHTS = { interest: 0.45, distance: 0.25, available: 0.1
 
 export function scoreListing(listing, { interests = {}, near = null, window = null, now = Date.now() }) {
   const interest = Object.keys(interests).length ? memberScore(listing, { interests }) : 0.5
-  const km = near ? haversineKm(near, listing) : null
+  const km = near && Number.isFinite(listing.lat) && Number.isFinite(listing.lng) ? haversineKm(near, listing) : null
   const distance = km == null ? 0.5 : Math.max(0, 1 - km / 10)
   const available = window ? (availableInWindow(listing, window.start, window.end) ? 1 : 0) : 0.5
   const age = now - (toMs(listing.source?.verifiedAt || listing.source?.retrievedAt || listing.createdAt) || now)

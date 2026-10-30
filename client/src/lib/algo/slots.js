@@ -161,12 +161,18 @@ export function rankSlots({ members, availability, rangeStart, rangeEnd, options
   const requiredIds = new Set(required.map((m) => m.id))
   const segs = segments(availability, ids, rangeStart, rangeEnd)
 
-  // Candidate groups: every distinct available set that contains all required members.
+  // A group may remain free while optional attendees change at a segment boundary.
+  // Include intersections across contiguous segments, not only each exact active set.
   const groups = new Map()
-  for (const s of segs) {
-    if (!isSubset(requiredIds, s.members)) continue
-    const key = [...s.members].sort().join(',')
-    if (!groups.has(key)) groups.set(key, s.members)
+  for (let i = 0; i < segs.length; i++) {
+    let group = new Set(segs[i].members)
+    for (let j = i; j < segs.length; j++) {
+      if (j > i && segs[j - 1].end !== segs[j].start) break
+      group = new Set([...group].filter((id) => segs[j].members.has(id)))
+      if (!group.size || !isSubset(requiredIds, group)) break
+      const key = [...group].sort().join(',')
+      if (!groups.has(key)) groups.set(key, group)
+    }
   }
 
   const minLen = o.minDurationMins * MIN

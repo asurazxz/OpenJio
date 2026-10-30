@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { SOFT_ISSUES, getPlan, generatePlan, setPlanStops, getAlternatives, vote, finalizePlan, listListings, previewStops, removeFromShortlist } from '../api/index.js'
 import { useLive } from '../composables/useLive.js'
 import { fmtRange, fmtTime } from '../lib/time.js'
@@ -12,16 +12,21 @@ import EmptyState from './EmptyState.vue'
 import VoteStamp from './brand/VoteStamp.vue'
 import WashiHeading from './brand/WashiHeading.vue'
 import SparkDoodle from './brand/SparkDoodle.vue'
+import CustomPlaceForm from './CustomPlaceForm.vue'
+import { moveIndex } from '../lib/reorder.js'
 
 const props = defineProps({ detail: { type: Object, required: true } })
 const emit = defineEmits(['goto'])
 
 const h = computed(() => props.detail.hangout)
 const isHost = computed(() => h.value.myRole === 'host')
+const closed = computed(() => ['ended', 'cancelled'].includes(h.value.stage))
+const canEdit = computed(() => isHost.value && !closed.value)
 const solo = computed(() => h.value.mode === 'solo')
-const { data: plan, reload } = useLive(() => getPlan(h.value.id))
+const { data: plan, error: planError, reload } = useLive(() => getPlan(h.value.id))
 
 const busy = ref(false)
+const saving = ref(false)
 const problems = ref(null)
 const active = ref(-1)
 
@@ -45,18 +50,20 @@ async function generate(relax = null) {
 }
 
 async function save(next, message) {
+  if (saving.value || !canEdit.value) return false
+  saving.value = true
   try {
     await setPlanStops(h.value.id, next)
     if (message) toast(message)
+    return true
   } catch (e) {
     toastError(e)
-  }
+    return false
+  } finally { saving.value = false }
 }
-function move(i, d) {
-  const next = ids.value.slice()
-  const [x] = next.splice(i, 1)
-  next.splice(i + d, 0, x)
-  save(next)
+function reorder({ from, to }) {
+  if (saving.value || busy.value || !canEdit.value) return
+  save(moveIndex(ids.value, from, to), 'Route order updated')
 }
 function remove(i) {
   const next = ids.value.slice()
@@ -81,6 +88,7 @@ async function castVote(stop, value) {
   }
 }
 const phase = computed(() => {
+  if (closed.value) return { key: 'closed', label: h.value.stage === 'ended' ? 'Ended' : 'Cancelled' }
   if (h.value.stage === 'final') return { key: 'final', label: 'Confirmed' }
   if (solo.value) return { key: 'draft', label: 'Draft' }
   if (blocking.value.length) return { key: 'blocked', label: 'Needs fixing' }
@@ -107,25 +115,30 @@ const swapIndex = ref(-1)
 const alternatives = ref(null)
 const altPick = ref(null)
 const altPreview = ref(null)
+let previewSequence = 0
 async function openSwap(i) {
+  const sequence = ++previewSequence
   swapIndex.value = i
   alternatives.value = null
   altPick.value = null
   altPreview.value = null
   try {
-    alternatives.value = await getAlternatives(h.value.id, i)
+    const result = await getAlternatives(h.value.id, i)
+    if (sequence === previewSequence && swapIndex.value === i) alternatives.value = result
   } catch (e) {
     toastError(e)
     swapIndex.value = -1
   }
 }
 async function pickAlt(alt) {
+  const sequence = ++previewSequence
   altPick.value = alt
   altPreview.value = null
   const next = ids.value.slice()
   next[swapIndex.value] = alt.listing.id
   try {
-    altPreview.value = await previewStops(h.value.id, next)
+    const result = await previewStops(h.value.id, next)
+    if (sequence === previewSequence && altPick.value?.listing.id === alt.listing.id) altPreview.value = result
   } catch (e) {
     toastError(e)
   }
@@ -139,13 +152,15 @@ const changedTimes = computed(() => {
 async function useAlt(alt) {
   const next = ids.value.slice()
   next[swapIndex.value] = alt.listing.id
-  swapIndex.value = -1
-  await save(next, `Swapped in ${alt.listing.title}`)
-  liveMsg.value = `Swapped in ${alt.listing.title}`
+  if (await save(next, `Swapped in ${alt.listing.title}`)) {
+    swapIndex.value = -1
+    liveMsg.value = `Swapped in ${alt.listing.title}`
+  }
 }
 
 /* Add-stop dialog */
 const addOpen = ref(false)
+const addTab = ref('discover')
 const allListings = ref([])
 const query = ref('')
 const kindFilter = ref('all')
@@ -155,7 +170,15 @@ async function openAdd() {
   addOpen.value = true
   preview.value = null
   previewFor.value = null
-  if (!allListings.value.length) allListings.value = (await listListings()).filter((l) => l.type !== 'hangout')
+  if (!allListings.value.length) {
+    try { allListings.value = (await listListings()).filter((l) => l.type !== 'hangout' && l.routeReady !== false) }
+    catch (e) { toastError(e) }
+  }
+}
+function customAdded(place) {
+  toast(`Added ${place.title}`)
+  addOpen.value = false
+  reload()
 }
 const shortlistIds = computed(() => new Set((plan.value?.shortlist || []).map((l) => l.id)))
 const addResults = computed(() => {
@@ -169,14 +192,20 @@ const addResults = computed(() => {
 })
 async function check(l) {
   previewFor.value = l.id
-  preview.value = await previewStops(h.value.id, [...ids.value, l.id])
+  const sequence = ++previewSequence
+  try {
+    const result = await previewStops(h.value.id, [...ids.value, l.id])
+    if (sequence === previewSequence && previewFor.value === l.id) preview.value = result
+  } catch (e) { toastError(e) }
 }
 async function addStop(l) {
-  await save([...ids.value, l.id], `Added ${l.title}`)
+  if (!await save([...ids.value, l.id], `Added ${l.title}`)) return
   if (shortlistIds.value.has(l.id)) removeFromShortlist(h.value.id, l.id).catch(() => {})
   addOpen.value = false
 }
 const previewIssues = computed(() => (preview.value ? preview.value.issues.filter((i) => i.index === ids.value.length || i.index === -1) : []))
+
+watch(closed, (value) => { if (value) { swapIndex.value = -1; addOpen.value = false; previewSequence++ } })
 
 const markers = computed(() =>
   (plan.value?.stops || []).map((s, i) => ({ id: i, lat: s.listing.lat, lng: s.listing.lng, label: String(i + 1), title: s.listing.title, active: active.value === i, tone: s.listing.kind === 'meal' ? 'mustard' : 'tomato' })),
@@ -191,7 +220,9 @@ const voteSummary = computed(() => {
 
 <template>
   <div>
-    <div v-if="!plan" class="py-5 text-center"><span class="spinner-border" aria-label="Loading plan"></span></div>
+    <div v-if="planError" class="notice danger" role="alert"><p>We could not load this plan. Your saved stops have not changed.</p><button type="button" class="btn btn-secondary" @click="reload">Try again</button></div>
+    <EmptyState v-else-if="closed && (!plan || !plan.stops.length)" :title="h.stage === 'cancelled' ? 'This hangout was cancelled' : 'This hangout has ended'" body="Its planning actions are closed. Start a new jio when you are ready." />
+    <div v-else-if="!plan" class="py-5 text-center"><span class="spinner-border" aria-label="Loading plan"></span></div>
 
     <EmptyState v-else-if="plan.needsSlot" title="Lock a time first" body="Plans are built around a fixed time so every stop is open and reachable." tone="mustard">
       <button type="button" class="btn btn-secondary" @click="emit('goto', 'time')">Go to times</button>
@@ -210,13 +241,13 @@ const voteSummary = computed(() => {
         </div>
       </div>
 
-      <div v-if="isHost" class="row g-3">
+      <div v-if="canEdit" class="row g-3">
         <div class="col-md-7">
           <div class="choice card-x pop">
             <span class="tag tag-tomato">Recommended</span>
             <h3>Make me a plan</h3>
-            <p class="muted">We check opening hours, deals and travel times for {{ fmtRange(h.lockedSlot.start, h.lockedSlot.end) }}, then balance everyone's interests so nobody is left out.</p>
-            <button type="button" class="btn btn-primary" :disabled="busy" @click="generate()">
+            <p class="muted">We check opening hours, deals and travel times for {{ fmtRange(h.lockedSlot.start, h.lockedSlot.end) }}, then balance everyone's interests while balancing the group’s different interests.</p>
+            <button type="button" class="btn btn-primary" :disabled="busy || saving" @click="generate()">
               <span v-if="busy" class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>
               {{ busy ? 'Working it out…' : 'Generate plan' }}
             </button>
@@ -268,7 +299,8 @@ const voteSummary = computed(() => {
             <WashiHeading tag="h3" tone="orange" class="m-0">The plan</WashiHeading>
             <span class="phase tnum" :class="'ph-' + phase.key">{{ phase.label }}</span>
           </div>
-          <PlanTimeline :stops="plan.stops" :start="h.startArea" :issues="plan.issues" :active-index="active" @focus="active = $event">
+          <p v-if="canEdit && plan.stops.length > 1" class="small muted mb-3">Drag stops to reorder your route. You can also use the position selector or the keyboard on a drag handle.</p>
+          <PlanTimeline :stops="plan.stops" :start="h.startArea" :issues="plan.issues" :active-index="active" :reorderable="canEdit && plan.stops.length > 1" :disabled="saving || busy" @reorder="reorder" @focus="active = $event">
             <template #actions="{ stop, index }">
               <div class="stop-actions">
                 <div v-if="!solo && h.stage === 'voting'" class="votes" role="group" :aria-label="`Vote on ${stop.listing.title}`">
@@ -277,22 +309,20 @@ const voteSummary = computed(() => {
                   <span class="small muted tnum">{{ stop.votes.voted }} of {{ stop.votes.of }} voted</span>
                   <span v-if="stop.votes.net < 0" class="tag tag-plum">{{ isHost ? 'Group leans swap' : 'Group is unsure' }}</span>
                 </div>
-                <div v-if="isHost" class="host-actions">
-                  <button type="button" class="btn btn-ghost btn-sm" @click="openSwap(index)">Swap stop</button>
-                  <button type="button" class="btn btn-ghost btn-sm" :disabled="index === 0" :aria-label="`Move ${stop.listing.title} earlier`" @click="move(index, -1)">Earlier</button>
-                  <button type="button" class="btn btn-ghost btn-sm" :disabled="index === plan.stops.length - 1" :aria-label="`Move ${stop.listing.title} later`" @click="move(index, 1)">Later</button>
-                  <button type="button" class="btn btn-ghost btn-sm" :aria-label="`Remove ${stop.listing.title}`" @click="remove(index)">Remove</button>
+                <div v-if="canEdit" class="host-actions">
+                  <button type="button" class="btn btn-ghost btn-sm" :disabled="saving" @click="openSwap(index)">Swap stop</button>
+                  <button type="button" class="btn btn-ghost btn-sm" :disabled="saving" :aria-label="`Remove ${stop.listing.title}`" @click="remove(index)">Remove</button>
                 </div>
-                <button v-else-if="h.stage === 'voting'" type="button" class="btn btn-ghost btn-sm" @click="openSwap(index)">See other options</button>
+                <button v-else-if="h.stage === 'voting'" type="button" class="btn btn-ghost btn-sm" :disabled="saving" @click="openSwap(index)">See other options</button>
               </div>
             </template>
           </PlanTimeline>
           <div v-if="plan.issues.some((i) => i.index === -1)" class="small muted mt-2">
             <span v-for="i in plan.issues.filter((x) => x.index === -1)" :key="i.type">{{ i.message }}. </span>
           </div>
-          <div v-if="isHost" class="d-flex flex-wrap gap-2 mt-3">
-            <button type="button" class="btn btn-secondary btn-sm" :disabled="plan.stops.length >= 6" @click="openAdd">Add a stop</button>
-            <button type="button" class="btn btn-ghost btn-sm" :disabled="busy" @click="generate()">Regenerate</button>
+          <div v-if="canEdit" class="d-flex flex-wrap gap-2 mt-3">
+            <button type="button" class="btn btn-secondary btn-sm" :disabled="saving || plan.stops.length >= 6" @click="openAdd">Add a stop</button>
+            <button type="button" class="btn btn-ghost btn-sm" :disabled="busy || saving" @click="generate()">Regenerate</button>
           </div>
         </div>
 
@@ -306,7 +336,7 @@ const voteSummary = computed(() => {
               </ul>
               <p class="small muted mb-0">{{ plan.generatedBy === 'manual' ? 'Built by hand and checked automatically.' : 'Generated by comparing many possible orders of stops.' }} <RouterLink to="/how">How it works</RouterLink></p>
             </div>
-            <div v-if="isHost && h.stage === 'voting'" class="card-x pop mt-3 confirm-box">
+            <div v-if="canEdit && h.stage === 'voting'" class="card-x pop mt-3 confirm-box">
               <p class="phase-line"><span class="phase" :class="'ph-' + phase.key">{{ phase.label }}</span></p>
               <template v-if="!solo">
                 <p class="m-0 tnum"><strong>{{ voteSummary.fully }} of {{ voteSummary.total }}</strong> stops have votes from everyone.</p>
@@ -322,7 +352,7 @@ const voteSummary = computed(() => {
       </div>
     </template>
 
-    <AppDialog :open="swapIndex !== -1" :title="isHost ? 'Swap this stop' : 'Other options'" sheet @close="swapIndex = -1">
+    <AppDialog :open="swapIndex !== -1" :title="isHost ? 'Swap this stop' : 'Other options'" sheet @close="swapIndex = -1; previewSequence++">
       <div v-if="plan?.stops[swapIndex]" class="current-stop">
         <span class="small muted">Now</span>
         <p class="m-0 fw-bold">{{ plan.stops[swapIndex].listing.title }}</p>
@@ -360,12 +390,17 @@ const voteSummary = computed(() => {
       </div>
       <div class="sheet-actions">
         <button type="button" class="btn btn-ghost" @click="swapIndex = -1">Keep current stop</button>
-        <button v-if="isHost" type="button" class="btn btn-primary" :disabled="!altPick || !altPreview || altPreview.issues.some((x) => !SOFT_ISSUES.includes(x.type))" @click="useAlt(altPick)">Confirm swap</button>
+        <button v-if="canEdit" type="button" class="btn btn-primary" :disabled="!altPick || !altPreview || altPreview.issues.some((x) => !SOFT_ISSUES.includes(x.type))" @click="useAlt(altPick)">Confirm swap</button>
       </div>
       <p v-if="!isHost && alternatives?.length" class="small muted mb-0 mt-2">Vote to swap and the host will see these options.</p>
     </AppDialog>
 
-    <AppDialog :open="addOpen" title="Add a stop" wide @close="addOpen = false">
+    <AppDialog :open="addOpen" title="Add a stop" wide @close="addOpen = false; previewSequence++">
+      <div class="d-flex flex-wrap gap-2 mb-3" role="group" aria-label="Where to find a stop">
+        <button v-for="tab in [{ id: 'discover', label: 'From Discover' }, { id: 'search', label: 'Find a place' }, { id: 'manual', label: 'Enter manually' }]" :key="tab.id" type="button" class="btn btn-sm" :class="addTab === tab.id ? 'btn-primary' : 'btn-secondary'" :aria-pressed="addTab === tab.id" @click="addTab = tab.id">{{ tab.label }}</button>
+      </div>
+      <CustomPlaceForm v-if="addOpen && addTab !== 'discover'" :key="addTab" :hangout-id="h.id" :manual="addTab === 'manual'" :disabled="saving || busy || !canEdit" @added="customAdded" />
+      <template v-else-if="addTab === 'discover'">
       <div class="d-flex flex-wrap gap-2 mb-3">
         <input v-model="query" class="form-control flex-grow-1" style="min-width: 200px; width: auto" placeholder="Search by name, area or interest" aria-label="Search places" />
         <select v-model="kindFilter" class="form-select" style="width: auto" aria-label="Kind">
@@ -394,6 +429,7 @@ const voteSummary = computed(() => {
           </div>
         </li>
       </ul>
+      </template>
     </AppDialog>
     <p class="visually-hidden" role="status" aria-live="polite">{{ liveMsg }}</p>
   </div>

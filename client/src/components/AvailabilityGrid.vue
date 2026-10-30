@@ -4,7 +4,7 @@
 // to every slot it crosses. On touch, dragging only paints while "Drag to paint" is on, so normal
 // swipes still scroll the page. Phones show one day at a time; wider screens show the whole range.
 // Read-only mode with `counts` shades each slot by how many people are free.
-import { computed, ref, nextTick, onMounted, onBeforeUnmount } from 'vue'
+import { computed, ref, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import { fromDateKey, fmtDay, fmtTime, fmtDuration, MIN } from '../lib/time.js'
 
 const props = defineProps({
@@ -197,6 +197,21 @@ const focusS = ref(null)
 const firstS = computed(() => shownDays.value[0] + rows.value[0] * MIN)
 const tabS = computed(() => (focusS.value != null && shownDays.value.some((d) => focusS.value >= d && focusS.value < d + 864e5) ? focusS.value : firstS.value))
 const root = ref(null)
+watch([() => props.highlight?.start, () => props.days.join(','), () => narrow.value], async ([start]) => {
+  if (!props.readonly || !Number.isFinite(start)) return
+  const index = dayStarts.value.findIndex(day => start >= day && start < day + 864e5)
+  if (index < 0) return
+  activeDay.value = index
+  await nextTick()
+  const overlap = root.value?.closest('.overlap-grid')
+  const container = overlap && (narrow.value ? overlap : root.value?.querySelector('.grid-wrap'))
+  const selectedCell = root.value?.querySelector('.hl')
+  if (container?.clientHeight && selectedCell) {
+    const heading = root.value.querySelector(narrow.value ? '.daypicker' : '.day-head')
+    const context = Math.max((heading?.getBoundingClientRect().height || 0) + 12, container.clientHeight * 0.2)
+    container.scrollTop += selectedCell.getBoundingClientRect().top - container.getBoundingClientRect().top - context
+  }
+}, { immediate: true })
 async function focusCell(s) {
   focusS.value = s
   await nextTick()
@@ -428,6 +443,7 @@ const rowTime = (m) => minText(m)
 .narrow .presets > .small { flex: none; }
 
 .daypicker { display: flex; gap: 6px; overflow-x: auto; padding: 2px 2px 8px; margin: 0 -2px 6px; scrollbar-width: none; }
+.readonly .daypicker { position: sticky; top: 0; z-index: 3; background: var(--card); }
 .dp {
   flex: none;
   display: flex;

@@ -60,9 +60,22 @@ def _iso(day, month, year):
         return None
 
 
-def _parse_dates(text):
-    """Return (dateFrom, dateTo). Years missing from the text use the current SGT year."""
-    default_year = datetime.now(SGT).year
+def reference_year(posted_at=None):
+    """Use the post's Singapore year, or the current Singapore year when unavailable."""
+    try:
+        value = datetime.fromisoformat(posted_at) if isinstance(posted_at, str) else posted_at
+        if isinstance(value, datetime):
+            if value.tzinfo is None:
+                value = value.replace(tzinfo=SGT)
+            return value.astimezone(SGT).year
+    except ValueError:
+        pass
+    return datetime.now(SGT).year
+
+
+def _parse_dates(text, posted_at=None):
+    """Return (dateFrom, dateTo). Unstated years use the post's SGT year."""
+    default_year = reference_year(posted_at)
     found, work = [], text
     for kind, pattern in DATE_PATTERNS:
         def keep(match, kind=kind):
@@ -188,10 +201,10 @@ def _classify(text):
     return "other"
 
 
-def parse_text(text):
+def parse_text(text, posted_at=None):
     """Return regex hints for a post. Anything not found is None."""
     text = text or ""
-    date_from, date_to = _parse_dates(text)
+    date_from, date_to = _parse_dates(text, posted_at)
     return {
         "kind": _classify(text),
         "dateFrom": date_from,

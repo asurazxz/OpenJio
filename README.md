@@ -22,7 +22,7 @@ pnpm --dir server install
 pnpm --dir server dev
 ```
 
-Credentials are optional. Without them the app uses estimated travel times, sample listings and the manual availability grid. See [docs/SETUP-CREDENTIALS.md](docs/SETUP-CREDENTIALS.md) to add OneMap, Gemini, Telegram and Google Calendar keys to a root `.env` (copy `.env.example`).
+Credentials are optional. Without them the app uses estimated travel times, sample listings and the manual availability grid. See [docs/SETUP-CREDENTIALS.md](docs/SETUP-CREDENTIALS.md) to add OneMap, Geoapify, Gemini and Telegram credentials to a root `.env` (copy `.env.example`).
 
 ## What to try
 
@@ -70,8 +70,8 @@ Drafts go to `pipeline/out/drafts.json`. Nothing reaches Discover until a review
 ## Data sources and credits
 
 - **OneMap**, Singapore Land Authority: map tiles, address search and public transport routing.
+- **Geoapify Free**, using OpenStreetMap data: optional Singapore place-name search and details for host-added stops. Search and details are cached; provider calls are capped at 1,000 per UTC day for one server process/data directory.
 - **NEA two-hour weather forecast** via data.gov.sg.
-- **Google Calendar API** free/busy (optional, on-demand import of busy times only).
 - Public posts from the Telegram channels @sgfooddeals, @sgweekend, @sgconcerts, @dateideas and @sgstudentpromos, and articles from confirmgood.com. Listings link back to their source.
 - **Sample data**: the places are real public venues with approximate hours; events and deals in the sample are made up and labelled as sample data in the app.
 

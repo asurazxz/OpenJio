@@ -8,16 +8,32 @@ const props = defineProps({
   path: { type: Boolean, default: false },
   start: { type: Object, default: null }, // { lat, lng, label }
   height: { type: String, default: '320px' },
+  scrollWheelZoom: { type: Boolean, default: false },
+  trackLayout: { type: Boolean, default: false },
   dark: { type: Boolean, default: false },
 })
-const emit = defineEmits(['select'])
+const emit = defineEmits(['select', 'layout', 'interact'])
 
 const el = ref(null)
 let map = null
 let layer = null
 let ro = null
+let geometry = ''
+const markerLayers = new Map()
 
 const SG_BOUNDS = L.latLngBounds([1.144, 103.535], [1.494, 104.1])
+
+function reportLayout() {
+  if (!props.trackLayout || !map) return
+  const size = map.getSize()
+  emit('layout', {
+    width: size.x, height: size.y,
+    points: props.markers.filter(m => Number.isFinite(m.lat) && Number.isFinite(m.lng)).map(m => {
+      const point = map.latLngToContainerPoint([m.lat, m.lng])
+      return { id: m.id, x: point.x, y: point.y }
+    }),
+  })
+}
 
 function icon(m) {
   const cls = `pin tone-${m.tone || 'tomato'}${m.active ? ' active' : ''}`
@@ -31,7 +47,16 @@ function icon(m) {
 
 function draw() {
   if (!map) return
+  const nextGeometry = JSON.stringify([props.start && [props.start.lat, props.start.lng], props.markers.map((m) => [m.id, m.lat, m.lng, m.label, m.tone, m.title, m.preview]), props.path])
+  if (nextGeometry === geometry) {
+    for (const m of props.markers) {
+      markerLayers.get(m.id)?.getElement()?.querySelector('.pin')?.classList.toggle('active', Boolean(m.active))
+    }
+    return
+  }
+  geometry = nextGeometry
   layer.clearLayers()
+  markerLayers.clear()
   const pts = []
   if (props.start) {
     const s = L.marker([props.start.lat, props.start.lng], {
@@ -44,9 +69,35 @@ function draw() {
   }
   for (const m of props.markers) {
     if (m.lat == null || m.lng == null) continue
-    const mk = L.marker([m.lat, m.lng], { icon: icon(m), title: m.title || '', riseOnHover: true })
-    mk.on('click', () => emit('select', m.id))
+    const mk = L.marker([m.lat, m.lng], { icon: icon(m), alt: m.title || 'Location', riseOnHover: true })
+    if (m.title) {
+      // Listing text is inserted as text, never interpreted as tooltip HTML.
+      const preview = document.createElement('div')
+      const fields = [
+        ['kind', m.preview?.kind], ['title', m.title],
+        ['location', m.preview?.location], ['when', m.preview?.when],
+        ['price', m.preview?.price], ['spots', m.preview?.spots],
+      ]
+      for (const [name, value] of fields) {
+        if (!value) continue
+        const line = document.createElement(name === 'title' ? 'strong' : 'span')
+        line.className = `map-preview-${name}`
+        line.textContent = value
+        preview.append(line)
+      }
+      mk.bindTooltip(preview, { className: 'map-pin-preview', direction: 'top', offset: [0, -25], opacity: 1 })
+    }
+    mk.on('tooltipopen', () => emit('interact'))
+    mk.on('click', () => { mk.closeTooltip(); emit('select', m.id) })
+    mk.on('keydown', event => {
+      if (!['Enter', ' '].includes(event.originalEvent.key)) return
+      L.DomEvent.stop(event.originalEvent)
+      mk.closeTooltip()
+      emit('select', m.id)
+    })
+    mk.on('add', () => mk.getElement()?.setAttribute('aria-label', m.title || 'Open location details'))
     mk.addTo(layer)
+    markerLayers.set(m.id, mk)
     pts.push([m.lat, m.lng])
   }
   if (props.path && pts.length > 1) {
@@ -66,7 +117,7 @@ onMounted(async () => {
     minZoom: 11,
     maxZoom: 18,
     zoomControl: true,
-    scrollWheelZoom: false,
+    scrollWheelZoom: props.scrollWheelZoom,
     attributionControl: true,
   })
   L.tileLayer('https://www.onemap.gov.sg/maps/tiles/{style}/{z}/{x}/{y}.png', {
@@ -78,12 +129,14 @@ onMounted(async () => {
       '<a href="https://www.onemap.gov.sg/" target="_blank" rel="noopener noreferrer">OneMap</a> &copy; contributors | <a href="https://www.sla.gov.sg/" target="_blank" rel="noopener noreferrer">Singapore Land Authority</a>',
   }).addTo(map)
   layer = L.layerGroup().addTo(map)
+  map.on('move zoom resize', reportLayout)
   draw()
+  reportLayout()
+  map.on('dragstart zoomstart', () => emit('interact'))
   // The container can change size after mount (tabs, sticky sidebars); keep Leaflet in sync.
   ro = new ResizeObserver(() => {
     if (!map) return
     map.invalidateSize()
-    draw()
   })
   ro.observe(el.value)
 })
@@ -92,11 +145,12 @@ onBeforeUnmount(() => {
   ro?.disconnect()
   map?.remove()
   map = null
+  markerLayers.clear()
 })
 
 watch(() => [props.markers, props.start], draw, { deep: true })
 
-defineExpose({ invalidate: () => map?.invalidateSize() })
+defineExpose({ invalidate: () => map?.invalidateSize(), focusMarker: id => markerLayers.get(id)?.getElement()?.focus({ preventScroll: true }) })
 </script>
 
 <template>
@@ -148,6 +202,13 @@ defineExpose({ invalidate: () => map?.invalidateSize() })
 <style>
 /* Unscoped: warm tint on map tiles, inverted for dark mode. */
 .map-x .leaflet-tile-pane { filter: sepia(0.35) saturate(0.85) brightness(1.02); }
+.map-pin-preview.leaflet-tooltip { padding: 14px 16px; width: max-content; max-width: min(260px, calc(100vw - 64px)); white-space: normal; overflow-wrap: anywhere; background: var(--card); color: var(--ink); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow-pop); font-family: var(--font-body); font-size: .85rem; line-height: 1.4; }
+.map-pin-preview.leaflet-tooltip-top::before { border-top-color: var(--card); }
+.map-pin-preview > div { display: grid; gap: 5px; }
+.map-preview-title { font-family: var(--font-display); font-size: 1rem; }
+.map-preview-kind { color: var(--teal-ink); font-size: .75rem; font-weight: 700; }
+.map-preview-location { color: var(--ink-2); }
+.map-preview-when, .map-preview-spots { font-weight: 600; }
 :root[data-theme='dark'] .map-x .leaflet-tile-pane { filter: invert(0.9) hue-rotate(180deg) sepia(0.35) brightness(0.85) contrast(0.9); }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) .map-x .leaflet-tile-pane { filter: invert(0.9) hue-rotate(180deg) sepia(0.35) brightness(0.85) contrast(0.9); }

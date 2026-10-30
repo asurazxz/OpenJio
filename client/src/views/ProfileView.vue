@@ -4,6 +4,7 @@ import { currentUser, updateProfile, AREAS } from '../api/index.js'
 import InterestPicker from '../components/InterestPicker.vue'
 import UserAvatar from '../components/UserAvatar.vue'
 import { toast, toastError } from '../lib/toast.js'
+import { useUnsavedChanges } from '../composables/useUnsavedChanges.js'
 
 // Order-independent snapshot of the editable fields, used to tell whether anything changed.
 function snapshot(name, homeArea, weights) {
@@ -24,6 +25,7 @@ const nameInput = ref(null)
 
 const nameError = computed(() => (name.value.trim() ? '' : 'Add a display name.'))
 const dirty = computed(() => snapshot(name.value.trim(), homeArea.value, weights.value) !== saved.value)
+useUnsavedChanges(dirty, 'Leave without saving your profile changes?')
 const canSave = computed(() => dirty.value && !nameError.value && !saving.value)
 const preview = computed(() => ({ ...me.value, name: name.value.trim() || me.value?.name }))
 

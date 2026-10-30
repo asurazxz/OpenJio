@@ -1,7 +1,7 @@
 <script setup>
 import { computed, ref, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { session, currentUser, signOut, resetDemo } from '../api/index.js'
+import { session, currentUser, signOut, resetDemo, isDemo } from '../api/index.js'
 import { revision } from '../api/store.js'
 import { getTheme, setTheme } from '../lib/theme.js'
 import OpenJioWordmark from './brand/OpenJioWordmark.vue'
@@ -14,9 +14,12 @@ const user = computed(() => {
   revision.value
   return session.userId ? currentUser() : null
 })
+const landing = computed(() => route.name === 'home' && !session.userId)
 const menuOpen = ref(false)
 const menuEl = ref(null)
 const theme = ref(getTheme())
+const refreshTheme = () => { theme.value = getTheme() }
+function startTour() { window.dispatchEvent(new CustomEvent('openjio:tour')) }
 
 function cycleTheme() {
   const order = ['system', 'light', 'dark']
@@ -29,15 +32,20 @@ function onDoc(e) {
   if (menuOpen.value && menuEl.value && !menuEl.value.contains(e.target)) menuOpen.value = false
 }
 function onKey(e) {
-  if (e.key === 'Escape') menuOpen.value = false
+  if (e.key === 'Escape' && menuOpen.value) {
+    menuOpen.value = false
+    menuEl.value?.querySelector('.avatar-btn')?.focus()
+  }
 }
 onMounted(() => {
   document.addEventListener('click', onDoc)
   document.addEventListener('keydown', onKey)
+  window.addEventListener('openjio:theme-change', refreshTheme)
 })
 onBeforeUnmount(() => {
   document.removeEventListener('click', onDoc)
   document.removeEventListener('keydown', onKey)
+  window.removeEventListener('openjio:theme-change', refreshTheme)
 })
 watch(() => route.fullPath, () => (menuOpen.value = false))
 
@@ -74,12 +82,13 @@ function isActive(key) {
         <OpenJioWordmark :size="32" />
       </RouterLink>
 
-      <nav class="main-nav" aria-label="Main">
+      <nav v-if="!landing" class="main-nav" aria-label="Main">
         <RouterLink v-for="l in links" :key="l.key" :to="l.to" class="nav-link-x" :class="{ active: isActive(l.key) }" :aria-current="isActive(l.key) ? 'page' : undefined">{{ l.label }}</RouterLink>
       </nav>
 
       <div class="right">
-        <RouterLink v-if="user" to="/new" class="btn btn-primary btn-sm d-none d-md-inline-flex">Create a jio</RouterLink>
+        <button v-if="user" type="button" class="btn btn-ghost btn-sm tour-trigger" aria-label="Quick tour" title="Quick tour" @click="startTour"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.7" /><path d="M9.5 9a2.5 2.5 0 1 1 4 2c-1 .6-1.5 1.2-1.5 2.5M12 17h.01" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" /></svg><span class="d-none d-lg-inline">Quick tour</span></button>
+        <RouterLink v-if="user" to="/new" data-tour="nav-create" class="btn btn-primary btn-sm d-none d-md-inline-flex">Create a jio</RouterLink>
         <button type="button" class="btn btn-ghost btn-sm icon-btn" :aria-label="themeLabel" :title="themeLabel" @click="cycleTheme">
           <svg v-if="theme === 'dark'" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5Z" fill="currentColor" /></svg>
           <svg v-else-if="theme === 'light'" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><circle cx="12" cy="12" r="4.5" fill="currentColor" /><g stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8" /></g></svg>
@@ -87,20 +96,20 @@ function isActive(key) {
         </button>
 
         <div v-if="user" ref="menuEl" class="menu-wrap">
-          <button type="button" class="avatar-btn" :aria-expanded="menuOpen" aria-haspopup="menu" aria-label="Account menu" @click.stop="menuOpen = !menuOpen">
+          <button type="button" class="avatar-btn" :aria-expanded="menuOpen" aria-controls="account-links" aria-label="Account menu" @click.stop="menuOpen = !menuOpen">
             <UserAvatar :user="user" :size="36" />
           </button>
-          <div v-if="menuOpen" class="menu card-x pop" role="menu">
+          <nav v-if="menuOpen" id="account-links" class="menu card-x pop" aria-label="Account">
             <div class="menu-head">
               <strong>{{ user.name }}</strong>
-              <span class="small muted">Demo account</span>
+              <span class="small muted">{{ isDemo ? 'Demo account' : 'Your account' }}</span>
             </div>
-            <RouterLink to="/profile" class="menu-item" role="menuitem">Profile and interests</RouterLink>
-            <RouterLink v-if="user.reviewer" to="/review" class="menu-item" role="menuitem">Review listings</RouterLink>
-            <button type="button" class="menu-item" role="menuitem" @click="switchPerson">Switch person</button>
-            <button type="button" class="menu-item" role="menuitem" @click="doReset">Reset demo data</button>
-            <button type="button" class="menu-item" role="menuitem" @click="doSignOut">Sign out</button>
-          </div>
+            <RouterLink to="/profile" class="menu-item">Profile and interests</RouterLink>
+            <RouterLink v-if="user.reviewer" to="/review" class="menu-item">Review listings</RouterLink>
+            <button v-if="isDemo" type="button" class="menu-item" @click="switchPerson">Switch person</button>
+            <button v-if="isDemo" type="button" class="menu-item" @click="doReset">Reset demo data</button>
+            <button type="button" class="menu-item" @click="doSignOut">Sign out</button>
+          </nav>
         </div>
         <RouterLink v-else to="/signin" class="btn btn-secondary btn-sm">Sign in</RouterLink>
       </div>
@@ -139,6 +148,7 @@ function isActive(key) {
 .nav-link-x:hover { color: var(--ink); background: var(--paper-2); }
 .nav-link-x.active { color: var(--tomato-ink); background: var(--tomato-soft); }
 .right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+.tour-trigger { min-width: 44px; padding-inline: 8px; }
 .icon-btn { width: 44px; height: 44px; min-height: 44px; padding: 0; display: inline-grid; place-items: center; }
 .avatar-btn { background: none; border: 0; padding: 0; border-radius: 50%; cursor: pointer; }
 .menu-wrap { position: relative; }
@@ -165,5 +175,10 @@ function isActive(key) {
 .menu-item:hover { background: var(--paper-2); color: var(--ink); }
 @media (min-width: 768px) {
   .main-nav { display: flex; }
+}
+@media (min-width: 768px) and (max-width: 991.98px) {
+  .inner { gap: 10px; }
+  .nav-link-x { padding: 8px; font-size: .82rem; }
+  .right { gap: 3px; }
 }
 </style>

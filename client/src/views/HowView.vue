@@ -1,16 +1,18 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref } from 'vue'
 import { runItineraryEvaluation, runSlotEvaluation } from '../lib/algo/evaluate.js'
 import { WEIGHTS } from '../lib/algo/itinerary.js'
 import { fmtRange } from '../lib/time.js'
 
 const itin = ref([])
 const slots = ref([])
-onMounted(() => {
-  // Runs the same code the app uses, in your browser, on fixed sample cases.
+const evaluated = ref(false)
+function evaluate(event) {
+  if (!event.target.open || evaluated.value) return
   itin.value = runItineraryEvaluation()
   slots.value = runSlotEvaluation()
-})
+  evaluated.value = true
+}
 const pct = (x) => (x == null ? '-' : `${Math.round(x * 100)}%`)
 const num = (x, d = 2) => (x == null ? '-' : x.toFixed(d))
 const better = (a, b, higher = true) => a != null && b != null && (higher ? a > b + 1e-9 : a < b - 1e-9)
@@ -21,33 +23,39 @@ const better = (a, b, higher = true) => a != null && b != null && (higher ? a > 
     <header class="page-head">
       <p class="small-caps m-0">Under the hood</p>
       <h1>How OpenJio plans</h1>
-      <p>Two pieces of logic do the heavy lifting: finding a time that works, and building an outing that fits it. Both explain their choices, and both are compared against simpler methods below.</p>
+      <p>Less back-and-forth. A time you can make, a plan you can change, and a clear place to meet.</p>
     </header>
 
-    <section class="steps-grid" aria-label="Steps">
-      <article class="card-x step">
-        <span class="num">1</span>
-        <h2 class="h3">Finding a time</h2>
-        <p>Everyone marks the hours they would actually go out. People who have not replied count as <strong>unknown</strong>, never free. Required people must be free; after that, slots are ranked by how many can come, whether the time sits in sociable hours (11 am to 10 pm), usable length and weekends.</p>
-        <p class="small muted m-0">Calendar import removes clashes from the hours you marked. Busy time is rounded outwards and free time inwards, so rounding never invents availability. Only totals are shown to the group.</p>
-      </article>
-      <article class="card-x step">
-        <span class="num">2</span>
-        <h2 class="h3">Building the outing</h2>
-        <p>Nearby places, events and deals are checked against hard rules: opening hours, event times, deal days and hours, travel time between stops, and the end of the slot. Places with <strong>unknown hours are skipped</strong>, not assumed open. A meal is required only if the slot spans lunch or dinner.</p>
-        <p class="small muted m-0">A beam search keeps the 12 best partial plans at each step and extends them, instead of grabbing whatever looks best first.</p>
-      </article>
-      <article class="card-x step">
-        <span class="num">3</span>
-        <h2 class="h3">Agreeing and joining</h2>
-        <p>Members vote on each stop. Votes belong to a specific version of a stop, so changing it resets them. Swaps are re-timed before they are offered. Late joiners get the first stop they can reach with at least 20 minutes to spare, using travel time, not just the clock.</p>
-        <p class="small muted m-0">Locations are the published schedule, never live tracking.</p>
-      </article>
+    <section aria-labelledby="journey-heading" data-tour="how-overview">
+      <h2 id="journey-heading" class="journey-heading">From group chat to going out</h2>
+      <div class="steps-grid">
+        <article class="card-x story-step">
+          <div class="step-label"><span class="step-number">1</span> Find a time</div>
+          <figure class="availability-example" role="img" aria-label="Example group availability">
+            <div class="example-grid"><span></span><span>Fri</span><span>Sat</span><span>Sun</span><span>Mei</span><span class="free">✓</span><span class="free best">✓</span><span class="unknown">?</span><span>Arjun</span><span class="busy">—</span><span class="free best">✓</span><span class="free">✓</span><span>Farah</span><span class="free">✓</span><span class="free best">✓</span><span class="busy">—</span></div>
+            <figcaption><span class="tag tag-teal">Saturday · 3 of 3 free</span></figcaption>
+          </figure>
+          <h3>Your hours. A common window.</h3><p>Mark when you would actually go out. We compare the overlap and suggest the best times.</p><p class="small muted mb-0">No reply stays unknown. Required people must be free.</p>
+        </article>
+        <article class="card-x story-step">
+          <div class="step-label"><span class="step-number">2</span> Shape the outing</div>
+          <figure class="timeline-example" role="img" aria-label="Example outing timeline"><ol><li><time>2:00</time><span class="example-dot"></span><span><strong>A little art</strong><small>Gallery · 60 min</small></span></li><li class="travel"><time></time><span>↓</span><small>20 min travel</small></li><li><time>3:20</time><span class="example-dot meal"></span><span><strong>Kopi and a catch-up</strong><small>Cafe · 60 min</small></span></li></ol><figcaption>Opening hours + travel + your interests</figcaption></figure>
+          <h3>A plan that fits the time.</h3><p>Generate an outing, or pick the stops yourself. Preview changes before you swap one in.</p><p class="small muted mb-0">Unknown hours aren't assumed open. Estimates are labelled.</p>
+        </article>
+        <article class="card-x story-step">
+          <div class="step-label"><span class="step-number">3</span> Agree and go</div>
+          <figure class="votes-example" role="img" aria-label="Example group voting"><div class="example-stop">Kopi and a catch-up</div><div class="example-votes"><span class="keep">✓ Keep <strong>3</strong></span><span class="swap">↻ Swap <strong>0</strong></span></div><div class="confirmed-example">Host confirms the plan <span aria-hidden="true">→</span></div><figcaption>Running late? Find a stop you can still reach.</figcaption></figure>
+          <h3>Make the call together.</h3><p>Vote on each stop. The host makes the final call; late joiners get a reachable meeting point.</p><p class="small muted mb-0">Scheduled locations, never live tracking. No booking is made.</p>
+        </article>
+      </div>
     </section>
 
+    <details class="benchmarks" @toggle="evaluate">
+      <summary>See the algorithm comparison</summary>
+      <p class="small muted mt-3">Optional technical detail. These examples explain the trade-offs; they are not a guarantee of the best possible plan.</p>
     <section class="card-x mt-4" aria-labelledby="score-h">
       <h2 id="score-h" class="h3">How a plan is scored</h2>
-      <p class="muted">Each part is scaled to 0 to 1 before weighting. Group satisfaction blends the average member (60%) with the least happy member (40%), so one person is not sacrificed for the rest.</p>
+      <p class="muted">Each part is scaled to 0 to 1 before weighting. Group satisfaction blends the average member (60%) with the least happy member (40%), to balance the group average with less well-served members.</p>
       <div class="weights">
         <div v-for="(w, k) in WEIGHTS" :key="k" class="w" :class="{ neg: ['travel', 'wait'].includes(k) }">
           <span class="w-val">{{ ['travel', 'wait'].includes(k) ? '-' : '+' }}{{ w }}</span>
@@ -57,9 +65,9 @@ const better = (a, b, higher = true) => a != null && b != null && (higher ? a > 
       <p class="small muted mb-0">Conditional deals add a small bonus but are never counted as guaranteed savings.</p>
     </section>
 
-    <section class="mt-5" aria-labelledby="eval-h">
+    <section class="mt-4" aria-labelledby="eval-h">
       <h2 id="eval-h">Does it beat the simple approach?</h2>
-      <p class="muted">Live results from this browser, using the sample listings. The baseline repeatedly picks the most interesting stop that fits next, ignoring travel cost and meals. Bold marks the better value. Cases where the baseline wins are left in.</p>
+      <p class="muted">Live results from this browser, using the sample listings. The baseline repeatedly picks the most interesting stop that fits next. Both methods must satisfy the same timing and meal rules. Bold marks the better value. Cases where the baseline wins are left in.</p>
 
       <div class="table-wrap card-x p-0">
         <table class="table-x">
@@ -107,7 +115,7 @@ const better = (a, b, higher = true) => a != null && b != null && (higher ? a > 
           </tbody>
         </table>
       </div>
-      <p class="small muted mt-2">Reading it honestly: the beam search matches or beats greedy on overall score in every feasible case and never breaks the meal rule. Greedy sometimes travels a little less, and in one case keeps the least happy member happier, because it chases interest alone. The weights above decide that trade-off; they were tuned on these same cases, so treat them as a design choice rather than a proven optimum.</p>
+      <p class="small muted mt-2">Read the results as examples, not a benchmark. Scores depend on our chosen weights, and the cases below were used while tuning them. Less travel and higher group satisfaction can favour different plans.</p>
 
       <h3 class="mt-4">Slot ranking vs earliest common slot</h3>
       <div class="table-wrap card-x p-0">
@@ -143,20 +151,50 @@ const better = (a, b, higher = true) => a != null && b != null && (higher ? a > 
       </div>
     </section>
 
-    <section class="mt-5 card-x" aria-labelledby="data-h">
+    </details>
+
+    <section class="mt-4 card-x" aria-labelledby="data-h">
       <h2 id="data-h" class="h3">Where listings come from</h2>
       <ul class="mb-2">
         <li><strong>Sample data:</strong> real public places with approximate hours, and made-up events and deals, so the demo works offline. Marked "Sample data" everywhere.</li>
         <li><strong>Public posts:</strong> a pipeline reads public Singapore Telegram channels and confirmgood.com, extracts outlet, dates, times and conditions with an AI model (or pattern matching), and leaves anything unclear blank. A reviewer checks every draft before it appears in Discover.</li>
         <li><strong>Open jios:</strong> public hangouts created by people on OpenJio.</li>
       </ul>
-      <p class="small muted mb-0">Public APIs used: OneMap (maps, address search, routing), NEA two-hour forecast from data.gov.sg, and Google Calendar free/busy (optional).</p>
+      <p class="small muted mb-0">Public APIs used: OneMap (maps, address search, routing), NEA weather forecasts from data.gov.sg, and optional Geoapify place search using OpenStreetMap data. Availability is entered manually using the grid.</p>
     </section>
   </div>
 </template>
 
 <style scoped>
-.steps-grid { display: grid; gap: 14px; }
+.journey-heading { margin: 0 0 24px; }
+.steps-grid { display: grid; gap: 18px; }
+.story-step { padding: 22px; min-width: 0; }
+.story-step h3 { font-size: 1.2rem; margin: 20px 0 8px; }
+.story-step > p { font-size: .95rem; }
+.step-label { display: flex; align-items: center; gap: 9px; font-weight: 800; }
+.step-number { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: var(--tomato-soft); color: var(--tomato-ink); }
+figure { margin: 20px 0 0; min-height: 200px; padding: 18px 14px; background: var(--paper-2); border-radius: 14px; }
+figcaption { font-size: .75rem; text-align: center; margin-top: 16px; color: var(--ink-2); }
+.example-grid { display: grid; grid-template-columns: 1.2fr repeat(3,1fr); gap: 5px; font-size: .75rem; align-items: center; text-align: center; }
+.example-grid span { padding: 5px 0; border-radius: 6px; }
+.free { background: var(--teal-soft); color: var(--teal-ink); font-weight: 800; }
+.free.best { box-shadow: inset 0 0 0 1px var(--teal); }
+.busy { color: var(--ink-2); background: var(--line); }
+.unknown { border: 1px dashed var(--line-control); color: var(--ink-2); }
+.timeline-example ol { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
+.timeline-example li { display: grid; grid-template-columns: 36px 18px 1fr; gap: 8px; align-items: center; font-size: .8rem; }
+.timeline-example small { display: block; color: var(--ink-2); }
+.example-dot { width: 12px; height: 12px; border-radius: 50%; background: var(--teal); }
+.example-dot.meal { background: var(--mustard); }
+.travel { color: var(--ink-2); }
+.example-stop { font-family: var(--font-display); font-weight: 800; font-size: .95rem; text-align: center; margin: 12px 0 18px; }
+.example-votes { display: flex; gap: 8px; justify-content: center; }
+.example-votes span { padding: 8px 12px; border-radius: 10px; font-size: .8rem; }
+.keep { background: var(--teal-soft); color: var(--teal-ink); }.swap { background: var(--plum-soft); color: var(--plum-ink); }
+.confirmed-example { margin-top: 18px; text-align: center; font-size: .8rem; font-weight: 700; }
+.benchmarks { margin-top: 28px; border: 1px solid var(--line); border-radius: 18px; padding: 18px 22px; }
+.benchmarks > summary { cursor: pointer; font-weight: 800; font-family: var(--font-display); min-height: 26px; }
+
 .step { position: relative; padding-top: 22px; }
 .num {
   position: absolute;

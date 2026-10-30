@@ -97,3 +97,12 @@ test('subtractBusy and merge', () => {
   assert.deepEqual(mergeIntervals([{ start: 0, end: 10 }, { start: 10, end: 20 }]), [{ start: 0, end: 20 }])
   assert.equal(30 * MIN, 1800000)
 })
+
+test('optional attendees changing halfway do not hide a required member full window', () => {
+  const r = rankSlots({
+    members: [{ id: 'a', required: true, responded: true }, { id: 'b', responded: true }, { id: 'c', responded: true }],
+    availability: { a: [{ start: sat(10), end: sat(13) }], b: [{ start: sat(10), end: sat(11, 30) }], c: [{ start: sat(11, 30), end: sat(13) }] },
+    ...range,
+  })
+  assert.deepEqual(r.slots.map(({ start, end, attendees }) => ({ start, end, attendees })), [{ start: sat(10), end: sat(13), attendees: ['a'] }])
+})

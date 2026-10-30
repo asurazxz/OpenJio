@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test'
 
 async function signInAs(page, name) {
+  await page.addInitScript(() => localStorage.setItem('openjio:onboarding:v1', 'done'))
   await page.goto('/signin')
   await page.getByRole('button', { name }).click()
   await expect(page.getByRole('heading', { level: 1, name: /^(Kopi first|Free later|Jio makan), / })).toBeVisible()
@@ -11,6 +12,7 @@ test('the how-it-works page renders the evaluation table', async ({ page }) => {
   await page.goto('/how')
   await expect(page.getByRole('heading', { level: 1, name: 'How OpenJio plans' })).toBeVisible()
 
+  await page.getByText('See the algorithm comparison', { exact: true }).click()
   const beamRows = page.getByRole('row').filter({ hasText: 'Beam' })
   await expect(beamRows.nth(5)).toBeVisible()
   expect(await beamRows.count()).toBeGreaterThanOrEqual(6)

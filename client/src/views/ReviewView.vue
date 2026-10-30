@@ -5,6 +5,7 @@ import { useLive } from '../composables/useLive.js'
 import { toast, toastError } from '../lib/toast.js'
 import { fmtDay, fmtTime, toMs } from '../lib/time.js'
 import { TYPE_LABEL, TYPE_TONE, sourceLine } from '../lib/labels.js'
+import { hoursToEditor, hoursFromEditor } from '../lib/review.js'
 import EmptyState from '../components/EmptyState.vue'
 import AppDialog from '../components/AppDialog.vue'
 
@@ -59,7 +60,12 @@ const FIELD_WORDS = {
   outlets: 'address',
   'validity.dateFrom': 'dates',
   'validity.dateTo': 'dates',
-  'validity.timeWindows': 'opening hours',
+  'validity.timeWindows': 'offer time windows',
+  'validity.daysOfWeek': 'offer weekdays',
+  openingHours: 'venue opening hours',
+  lat: 'exact latitude',
+  lng: 'exact longitude',
+  durationMins: 'visit duration',
   startsAt: 'start time',
   endsAt: 'end time',
 }
@@ -140,6 +146,9 @@ function blankForm() {
     dateTo: '',
     startsAt: '',
     endsAt: '',
+    lat: '', lng: '', durationMins: '', routeReady: false,
+    openingDays: hoursToEditor(null), daysOfWeek: [], timeWindows: [],
+    conditions: '', exclusions: '', conditionsNone: false, exclusionsNone: false,
   }
 }
 
@@ -167,7 +176,7 @@ function openReview(d) {
     type: isDeal ? 'deal' : 'event',
     kind: isDeal ? 'meal' : 'activity',
     merchant: d.merchant || '',
-    area: '',
+    area: d.area || '',
     address: d.outlets?.[0]?.address || d.outlets?.[0]?.name || '',
     category: CATEGORY_SLUGS.has(d.category) ? d.category : '',
     summary: d.summary || '',
@@ -177,7 +186,23 @@ function openReview(d) {
     dateTo: d.validity?.dateTo || '',
     startsAt: localInput(d.startsAt),
     endsAt: localInput(d.endsAt),
+    lat: d.lat ?? d.outlets?.[0]?.lat ?? '', lng: d.lng ?? d.outlets?.[0]?.lng ?? '',
+    durationMins: d.durationMins ?? '', routeReady: false,
+    openingDays: hoursToEditor(d.openingHours),
+    daysOfWeek: [...(d.validity?.daysOfWeek || [])],
+    timeWindows: (d.validity?.timeWindows || []).map((window) => ({ ...window })),
+    conditions: (d.conditions || []).join('\n'), exclusions: (d.exclusions || []).join('\n'),
+    conditionsNone: false, exclusionsNone: false,
   }
+}
+
+const REVIEW_DAYS = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN']
+function restrictionLines(value, checkedNone) {
+  const lines = value.split('\n').map((line) => line.trim()).filter(Boolean)
+  return lines.length ? lines : checkedNone ? [] : null
+}
+function setHoursState(row) {
+  if (row.state === 'open' && !row.windows.length) row.windows.push({ start: '', end: '' })
 }
 
 function closeReview() {
@@ -204,7 +229,11 @@ async function publish() {
       summary: f.summary.trim(),
       priceText: f.priceText.trim(),
       dealText: isDeal ? f.dealText.trim() : undefined,
-      validity: isDeal ? { ...(d.validity || {}), dateFrom: f.dateFrom || null, dateTo: f.dateTo || null } : d.validity,
+      validity: isDeal ? { dateFrom: f.dateFrom || null, dateTo: f.dateTo || null, daysOfWeek: f.daysOfWeek.length ? [...f.daysOfWeek] : null, timeWindows: f.timeWindows.length ? f.timeWindows.map((window) => ({ ...window })) : null } : null,
+      lat: f.lat, lng: f.lng, durationMins: f.durationMins, routeReady: f.routeReady,
+      openingHours: hoursFromEditor(f.openingDays),
+      conditions: restrictionLines(f.conditions, f.conditionsNone),
+      exclusions: restrictionLines(f.exclusions, f.exclusionsNone),
       startsAt: isDeal ? null : isoFromLocal(f.startsAt),
       endsAt: isDeal ? null : isoFromLocal(f.endsAt),
     })
@@ -270,9 +299,11 @@ async function publish() {
               <article class="card-x draft">
                 <div class="d-flex flex-wrap gap-2 mb-2">
                   <span class="tag" :class="TYPE_TONE[p.type] || 'tag-teal'">{{ TYPE_LABEL[p.type] || p.type }}</span>
+                  <span class="tag" :class="p.routeReady === false ? 'tag-mustard' : 'tag-teal'">{{ p.routeReady === false ? 'Manual viewing only' : 'Available for planning' }}</span>
                 </div>
                 <h3 class="draft-title">{{ p.title }}</h3>
-                <p class="small muted m-0">{{ p.address }}</p>
+                <p class="small muted m-0">{{ p.address || 'Address unknown' }}</p>
+                <p v-if="p.routeReady === false" class="small muted m-0">Missing details stay unknown. This listing cannot be added to an itinerary.</p>
                 <p class="small muted m-0">{{ sourceLine(p) }}</p>
                 <div class="d-flex justify-content-end mt-3">
                   <button
@@ -398,6 +429,29 @@ async function publish() {
           </div>
         </div>
 
+        <div class="row g-3 mb-3">
+          <div class="col-sm-4"><label for="rv-lat" class="form-label">Exact venue latitude</label><input id="rv-lat" v-model="form.lat" type="number" step="any" min="-90" max="90" class="form-control" /></div>
+          <div class="col-sm-4"><label for="rv-lng" class="form-label">Exact venue longitude</label><input id="rv-lng" v-model="form.lng" type="number" step="any" min="-180" max="180" class="form-control" /></div>
+          <div class="col-sm-4"><label for="rv-duration" class="form-label">Visit duration (minutes)</label><input id="rv-duration" v-model="form.durationMins" type="number" min="1" max="1440" step="1" class="form-control" /></div>
+          <p class="form-text m-0 col-12">Leave unverified details blank. An area pin is not an exact venue location.</p>
+        </div>
+        <fieldset class="mb-3">
+          <legend class="h6">Venue opening hours</legend>
+          <p class="small muted">Only enter hours checked against the source. Unknown days stay unknown; choose Closed only when confirmed.</p>
+          <div v-for="day in REVIEW_DAYS" :key="day" class="hours-row mb-2">
+            <label :for="`rv-hours-${day}`" class="small">{{ day }}</label>
+            <select :id="`rv-hours-${day}`" v-model="form.openingDays[day.toLowerCase()].state" class="form-select form-select-sm" @change="setHoursState(form.openingDays[day.toLowerCase()])"><option value="unknown">Unknown</option><option value="closed">Closed</option><option value="open">Open at these times</option></select>
+            <div v-if="form.openingDays[day.toLowerCase()].state === 'open'" class="hours-windows">
+              <div v-for="(window, index) in form.openingDays[day.toLowerCase()].windows" :key="index" class="d-flex gap-1 align-items-center">
+                <input v-model="window.start" type="time" class="form-control form-control-sm" :aria-label="`${day} opening time ${index + 1}`" required />
+                <span>to</span><input v-model="window.end" type="time" class="form-control form-control-sm" :aria-label="`${day} closing time ${index + 1}`" required />
+                <button type="button" class="btn btn-ghost btn-sm" :aria-label="`Remove ${day} window ${index + 1}`" @click="form.openingDays[day.toLowerCase()].windows.splice(index, 1)">Remove</button>
+              </div>
+              <button type="button" class="btn btn-ghost btn-sm px-0" @click="form.openingDays[day.toLowerCase()].windows.push({ start: '', end: '' })">Add opening window</button>
+            </div>
+          </div>
+        </fieldset>
+
         <div class="mb-3">
           <label for="rv-summary" class="form-label">Summary</label>
           <textarea id="rv-summary" v-model="form.summary" class="form-control" rows="3"></textarea>
@@ -417,6 +471,20 @@ async function publish() {
             <label for="rv-to" class="form-label">Valid until</label>
             <input id="rv-to" v-model="form.dateTo" type="date" class="form-control" />
           </div>
+          <fieldset class="col-12">
+            <legend class="h6">Valid offer weekdays</legend>
+            <div class="d-flex flex-wrap gap-3"><label v-for="day in REVIEW_DAYS" :key="day" class="small"><input v-model="form.daysOfWeek" type="checkbox" :value="day" class="form-check-input me-1" />{{ day }}</label></div>
+            <p class="form-text">No checked days means unknown. Select all seven only if the source confirms daily validity.</p>
+          </fieldset>
+          <fieldset class="col-12">
+            <legend class="h6">Valid offer time windows</legend>
+            <div v-for="(window, index) in form.timeWindows" :key="index" class="d-flex gap-2 align-items-center mb-2">
+              <input v-model="window.start" type="time" class="form-control" :aria-label="`Offer start ${index + 1}`" required /><span>to</span><input v-model="window.end" type="time" class="form-control" :aria-label="`Offer end ${index + 1}`" required />
+              <button type="button" class="btn btn-ghost btn-sm" :aria-label="`Remove offer window ${index + 1}`" @click="form.timeWindows.splice(index, 1)">Remove</button>
+            </div>
+            <button type="button" class="btn btn-secondary btn-sm" @click="form.timeWindows.push({ start: '', end: '' })">Add offer window</button>
+            <p class="form-text">No windows means unknown. For a verified all-day offer, enter 00:00 to 23:59. Offer validity and venue hours are checked separately.</p>
+          </fieldset>
           <div class="col-12">
             <label for="rv-deal" class="form-label">Deal offer</label>
             <textarea id="rv-deal" v-model="form.dealText" class="form-control" rows="2"></textarea>
@@ -435,6 +503,21 @@ async function publish() {
           <p class="form-text m-0 col-12">Times are Singapore time (UTC+8).</p>
         </div>
 
+        <div class="mb-3">
+          <label for="rv-conditions" class="form-label">Conditions (one per line)</label>
+          <textarea id="rv-conditions" v-model="form.conditions" class="form-control" rows="2"></textarea>
+          <label class="small mt-1"><input v-model="form.conditionsNone" type="checkbox" class="form-check-input me-1" />Checked source: no additional conditions stated</label>
+        </div>
+        <div class="mb-3">
+          <label for="rv-exclusions" class="form-label">Exclusions (one per line)</label>
+          <textarea id="rv-exclusions" v-model="form.exclusions" class="form-control" rows="2"></textarea>
+          <label class="small mt-1"><input v-model="form.exclusionsNone" type="checkbox" class="form-check-input me-1" />Checked source: no exclusions stated</label>
+          <p class="form-text">Blank, unchecked restrictions remain unknown.</p>
+        </div>
+        <div class="notice mb-3">
+          <label><input v-model="form.routeReady" type="checkbox" class="form-check-input me-2" />Make this listing available for itinerary planning</label>
+          <p class="small mt-1">Requires exact venue coordinates, an address, category, duration, verified restrictions and opening hours or event times. Deals also need dates, weekdays and offer time windows. Otherwise it is published for manual viewing only, with missing information shown as unknown.</p>
+        </div>
         <p class="small muted mb-4">
           The original post text is not stored here, so check the source before you publish.
           <a v-if="editing.source?.url" :href="editing.source.url" target="_blank" rel="noopener noreferrer">Open the source post</a>
@@ -454,6 +537,9 @@ async function publish() {
 </template>
 
 <style scoped>
+.hours-row { display: grid; grid-template-columns: 44px minmax(130px, 1fr); gap: 8px; align-items: start; }
+.hours-windows { grid-column: 2; }
+.hours-windows .form-control { min-width: 0; }
 .draft-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 12px; }
 .card-x.draft { padding: 16px 18px; }
 .draft-title { margin: 0 0 4px; font-size: 1.15rem; overflow-wrap: anywhere; }

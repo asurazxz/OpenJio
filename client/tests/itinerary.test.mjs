@@ -74,3 +74,15 @@ test('travel minutes are never zero', () => {
   for (const s of r.stops) assert.ok(s.travelMins > 0)
   assert.ok(MIN > 0)
 })
+
+test('greedy baseline cannot report success without a required meal', () => {
+  const r = greedyItinerary({ ...base, candidates: L.filter((l) => l.kind !== 'meal') })
+  assert.equal(r.ok, false)
+})
+
+test('routing receives each leg actual departure time after the preceding visit', () => {
+  const departures = []
+  const r = retime([L[0], L[1]], { ...base, options: { mealWanted: false }, travel: (a, b, departMs) => { departures.push(departMs); return { mins: 10, mode: 'walk' } } })
+  assert.equal(r.ok, true)
+  assert.deepEqual(departures, [sat(12), sat(13, 40)])
+})

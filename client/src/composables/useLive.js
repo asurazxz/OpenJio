@@ -1,5 +1,5 @@
 // Load data and reload it whenever the demo store changes (this tab or another).
-import { ref, watch, onMounted } from 'vue'
+import { ref, watch, onMounted, onBeforeUnmount } from 'vue'
 import { revision } from '../api/store.js'
 
 export function useLive(loader, { immediate = true } = {}) {
@@ -27,5 +27,6 @@ export function useLive(loader, { immediate = true } = {}) {
 
   watch(revision, reload)
   if (immediate) onMounted(reload)
+  onBeforeUnmount(() => { seq++ })
   return { data, error, loading, reload }
 }

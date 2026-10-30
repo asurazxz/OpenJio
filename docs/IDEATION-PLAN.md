@@ -1,5 +1,7 @@
 # Ideation and Implementation Plan: OpenJio
 
+> Submission scope update (30 Oct 2026): Google Calendar import is excluded. Availability uses the existing When2meet-style manual grid. Earlier Calendar expansion proposals below are superseded by [decision D14](decisions.md#d14-use-manual-availability-only-for-the-project-submission).
+
 > Living document. Update the changelog whenever a decision changes.
 > **Decided** = agreed with the team. **Proposed** = recommendation awaiting team agreement. **Open** = unresolved (see §13). Nothing here is assumed beyond what is marked.
 >
@@ -11,6 +13,7 @@
 
 | Date | Change | Who |
 |---|---|---|
+| 30 Oct 2026 | Google Calendar import excluded from submission (decided); retain the When2meet-style manual availability grid | Huxley |
 | 26 Oct 2026 | Initial ideation doc on branch `revamp/ideate` | Huxley |
 | 28 Oct 2026 | Product name set to **OpenJio** (decided); build order added | Huxley |
 | 29 Oct 2026 | First build of R1 to R6 in demo mode (browser data store with the same async API a Supabase adapter will use). Local Express server for OneMap routing and drafts; Python pipeline with Gemini extraction; Supabase migration written but not deployed. Discover, plan generation, voting, late join, open jios, review queue and evaluation page working | Huxley |
@@ -388,7 +391,7 @@ Detailed status, verification and known issues are in [STATUS.md](./STATUS.md).
 | Foundation (scaffold, Supabase, auth, migration, seed) | Open | revamp/ideate | Demo mode built | Supabase project not created; migration in `supabase/migrations/` |
 | R1 Discover | Open | revamp/ideate | Built | Ranking, filters, map, source labels |
 | R2 Hangouts, voting, open jios | Open | revamp/ideate | Built | Invite links, versioned votes, confirm, open jios |
-| R3 Availability | Open | revamp/ideate | Built | Grid, ranked slots, optional Google Calendar import |
+| R3 Availability | Open | revamp/ideate | Built | Grid and ranked slots; Google Calendar import removed (D14) |
 | R4 Itinerary builder | Open | revamp/ideate | Built | Beam search, greedy baseline, swaps, manual build |
 | R5 Companion + routing module | Open | revamp/ideate | Built | Late join, NEA weather, OneMap server (needs credentials) |
 | R6 Content pipeline | Open | revamp/ideate | Built | Gemini extraction, review queue; labelled set still empty |

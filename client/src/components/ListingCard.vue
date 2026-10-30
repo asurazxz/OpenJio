@@ -15,7 +15,7 @@ defineEmits(['add', 'open'])
 
 const l = computed(() => props.listing)
 const when = computed(() => {
-  if (l.value.type === 'event' || l.value.type === 'hangout') return fmtRange(toMs(l.value.startsAt), toMs(l.value.endsAt))
+  if (l.value.type === 'event' || l.value.type === 'hangout') return l.value.startsAt && l.value.endsAt ? fmtRange(toMs(l.value.startsAt), toMs(l.value.endsAt)) : 'Time not confirmed'
   if (l.value.type === 'deal' && l.value.validity?.dateTo) return `Until ${fmtDateKey(l.value.validity.dateTo)}`
   return null
 })
@@ -41,6 +41,7 @@ const spots = computed(() => (l.value.type === 'hangout' && l.value.capacity ? M
     <p v-if="!compact" class="summary">{{ l.summary }}</p>
     <p v-if="when" class="when">{{ when }}</p>
     <div class="meta">
+      <span v-if="l.routeReady === false" class="tag">Visit details incomplete</span>
       <span v-for="i in (l.interests || []).slice(0, 2)" :key="i" class="tag">{{ interestLabel(i) }}</span>
       <span v-if="l.priceText" class="tag">{{ l.priceText }}</span>
       <span v-if="available === true" class="tag tag-teal">Fits your time</span>

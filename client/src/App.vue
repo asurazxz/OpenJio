@@ -2,6 +2,7 @@
 import AppHeader from './components/AppHeader.vue'
 import BottomNav from './components/BottomNav.vue'
 import ToastHost from './components/ToastHost.vue'
+import AppTour from './components/AppTour.vue'
 </script>
 
 <template>
@@ -14,6 +15,7 @@ import ToastHost from './components/ToastHost.vue'
   </main>
   <BottomNav />
   <ToastHost />
+  <AppTour />
 </template>
 
 <style>

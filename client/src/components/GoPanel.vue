@@ -1,8 +1,8 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, watch, onBeforeUnmount } from 'vue'
 import { getPlan, lateJoin, reopenVoting, setStage, AREAS, currentUser } from '../api/index.js'
 import { useLive } from '../composables/useLive.js'
-import { fmtTime, fmtDuration, fmtRange, sgDateKey, fromDateKey, MIN } from '../lib/time.js'
+import { fmtTime, fmtDuration, fmtRange, fmtDay, sgDateKey, fromDateKey, MIN } from '../lib/time.js'
 import { forecastNear } from '../lib/weather.js'
 import { toast, toastError } from '../lib/toast.js'
 import PlanTimeline from './PlanTimeline.vue'
@@ -13,7 +13,7 @@ const props = defineProps({ detail: { type: Object, required: true } })
 const emit = defineEmits(['goto'])
 const h = computed(() => props.detail.hangout)
 const isHost = computed(() => h.value.myRole === 'host')
-const { data: plan } = useLive(() => getPlan(h.value.id))
+const { data: plan, loading: planLoading, error: planError, reload: reloadPlan } = useLive(() => getPlan(h.value.id))
 
 const me = currentUser()
 const originArea = ref(me?.homeArea || 'city-hall')
@@ -34,6 +34,7 @@ const result = ref(null)
 const checking = ref(false)
 
 function useLocation() {
+  if (h.value.stage !== 'final') return
   geoError.value = ''
   if (!navigator.geolocation) {
     geoError.value = 'Location is not available in this browser.'
@@ -51,6 +52,7 @@ function useLocation() {
 }
 
 async function check() {
+  if (h.value.stage !== 'final' || !slotDay.value || checking.value) return
   checking.value = true
   result.value = null
   try {
@@ -67,13 +69,31 @@ async function check() {
 
 const weather = ref(null)
 const weatherError = ref('')
-onMounted(async () => {
+const weatherLoading = ref(false)
+let weatherController
+onBeforeUnmount(() => weatherController?.abort())
+async function loadWeather(fresh = false) {
+  weatherController?.abort()
+  if (!h.value.lockedSlot || !['final', 'ended'].includes(h.value.stage)) return
+  const controller = new AbortController()
+  weatherController = controller
+  weather.value = null
+  weatherError.value = ''
+  weatherLoading.value = true
   try {
-    weather.value = await forecastNear(h.value.startArea)
+    const forecast = await forecastNear(h.value.startArea, h.value.lockedSlot.start, { fresh, signal: controller.signal })
+    if (!controller.signal.aborted) weather.value = forecast
   } catch (e) {
-    weatherError.value = e.message
+    if (!controller.signal.aborted) weatherError.value = e.message
+  } finally {
+    if (weatherController === controller) weatherLoading.value = false
   }
-})
+}
+watch(() => [h.value.id, h.value.lockedSlot?.start, h.value.stage], () => { result.value = null; loadWeather() }, { immediate: true })
+function weatherTime(value) {
+  const ms = Date.parse(value)
+  return Number.isFinite(ms) ? `${fmtDay(ms)}, ${fmtTime(ms)}` : 'Not supplied'
+}
 
 const backup = computed(() => result.value?.options?.[1] || null)
 const directionsUrl = computed(() => {
@@ -82,6 +102,7 @@ const directionsUrl = computed(() => {
 })
 // Nothing is sent anywhere until the person chooses to share.
 async function shareEta() {
+  if (h.value.stage !== 'final' || !result.value?.best) return
   const b = result.value.best
   const text = `Joining late: I should reach ${b.stop.listing.title} around ${fmtTime(b.arriveMs)}.`
   try {
@@ -97,6 +118,7 @@ async function shareEta() {
 const markers = computed(() => (plan.value?.stops || []).map((s, i) => ({ id: i, lat: s.listing.lat, lng: s.listing.lng, label: String(i + 1), title: s.listing.title, active: result.value?.best?.index === i })))
 
 async function reopen() {
+  if (h.value.stage !== 'final' || !isHost.value) return
   if (!window.confirm('Reopen voting? Everyone will see the plan as not final until you confirm again.')) return
   try {
     await reopenVoting(h.value.id)
@@ -106,6 +128,7 @@ async function reopen() {
   }
 }
 async function end(stage) {
+  if (h.value.stage !== 'final' || !isHost.value) return
   const msg = stage === 'cancelled' ? 'Cancel this hangout for everyone?' : 'Mark this hangout as done?'
   if (!window.confirm(msg)) return
   try {
@@ -119,10 +142,12 @@ async function end(stage) {
 
 <template>
   <div>
-    <EmptyState v-if="h.stage !== 'final' && h.stage !== 'ended'" title="Not confirmed yet" body="Once the host confirms the plan, the final timeline and the late-join helper appear here." tone="teal">
-      <button type="button" class="btn btn-secondary" @click="emit('goto', 'plan')">See the draft plan</button>
+    <EmptyState v-if="h.stage !== 'final' && h.stage !== 'ended'" :title="h.stage === 'cancelled' ? 'Hangout cancelled' : 'Not confirmed yet'" :body="h.stage === 'cancelled' ? 'This outing is closed. Start a new hangout when you are ready.' : 'Once the host confirms the plan, the final timeline and the late-join helper appear here.'" tone="teal">
+      <button v-if="h.stage !== 'cancelled'" type="button" class="btn btn-secondary" @click="emit('goto', 'plan')">See the draft plan</button>
     </EmptyState>
 
+    <div v-else-if="planLoading && !plan" class="py-4" role="status">Loading the confirmed plan…</div>
+    <div v-else-if="planError" class="notice danger" role="alert"><p>{{ planError.message }}</p><button type="button" class="btn btn-secondary btn-sm" @click="reloadPlan">Retry loading plan</button></div>
     <div v-else-if="plan" class="row g-4">
       <div class="col-lg-7">
         <div class="d-flex justify-content-between align-items-baseline flex-wrap gap-2 mb-3">
@@ -138,9 +163,9 @@ async function end(stage) {
       </div>
 
       <aside class="col-lg-5">
-        <div class="card-x pop join">
+        <div v-if="h.stage === 'final'" class="card-x pop join">
           <h3 class="m-0">Joining later?</h3>
-          <p class="small muted">Tell us where you are leaving from and when. We find the first stop you can reach with time to spare. Your location stays on this device.</p>
+          <p class="small muted">Tell us where you are leaving from and when. We find the first stop you can reach with time to spare. When live routing is enabled, your chosen origin, including precise coordinates if you use location, is sent through our server to OneMap to calculate routes. It is not shared with the group.</p>
           <form class="row g-2" @submit.prevent="check">
             <div class="col-7">
               <label for="origin" class="small muted">Leaving from</label>
@@ -191,10 +216,17 @@ async function end(stage) {
 
         <div class="card-x mt-3 weather">
           <h3 class="h6 small-caps mb-1">Weather near {{ h.startArea.label }}</h3>
-          <p v-if="weather" class="m-0"><strong>{{ weather.forecast }}</strong> <span class="small muted">({{ weather.area }}, next 2 hours from NEA)</span></p>
-          <p v-if="weather?.wet" class="small m-0 mt-1">Bring an umbrella for the walks between stops.</p>
-          <p v-if="weatherError" class="small muted m-0">{{ weatherError }}</p>
-          <p v-if="!weather && !weatherError" class="small muted m-0">Checking the forecast…</p>
+          <template v-if="weather?.available">
+            <p class="m-0"><strong>{{ weather.forecast }}</strong> <span class="small muted">({{ weather.area }})</span></p>
+            <p class="small muted m-0 mt-1">{{ weather.source }} · {{ weather.horizon }} · issued {{ weatherTime(weather.issuedAt) }}</p>
+            <p class="small muted m-0">Covers {{ weatherTime(weather.validFrom) }} to {{ weatherTime(weather.validTo) }} (Singapore time). Selected for your outing start.</p>
+            <p v-if="weather.temperature" class="small m-0">{{ weather.temperature.low }}–{{ weather.temperature.high }}°C</p>
+            <p v-if="weather.wet" class="small m-0 mt-1">Bring an umbrella for the walks between stops.</p>
+          </template>
+          <p v-else-if="weather" class="small muted m-0">{{ weather.reason }}</p>
+          <p v-if="weatherError" class="small muted m-0" role="alert">{{ weatherError }}</p>
+          <p v-if="weatherLoading" class="small muted m-0" role="status">Checking weather for the outing…</p>
+          <button v-if="!weatherLoading && (weatherError || !weather?.available)" type="button" class="btn btn-ghost btn-sm px-0" @click="loadWeather(true)">Retry forecast</button>
         </div>
       </aside>
     </div>

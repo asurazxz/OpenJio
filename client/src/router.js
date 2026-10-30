@@ -2,7 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import { session } from './api/index.js'
 
 const routes = [
-  { path: '/', name: 'home', component: () => import('./views/HomeView.vue'), meta: { auth: true, title: 'Home' } },
+  { path: '/', name: 'home', component: () => import('./views/EntryView.vue'), meta: { title: 'Home' } },
   { path: '/signin', name: 'signin', component: () => import('./views/SignInView.vue'), meta: { title: 'Sign in' } },
   { path: '/discover', name: 'discover', component: () => import('./views/DiscoverView.vue'), meta: { title: 'Discover' } },
   { path: '/new', name: 'new', component: () => import('./views/NewHangoutView.vue'), meta: { auth: true, title: 'Create a jio' } },
@@ -26,7 +26,7 @@ router.beforeEach((to) => {
 })
 
 router.afterEach((to) => {
-  document.title = to.meta.title ? `${to.meta.title} | OpenJio` : 'OpenJio'
+  document.title = to.name === 'home' && !session.userId ? 'OpenJio | Plan your next outing' : to.meta.title ? `${to.meta.title} | OpenJio` : 'OpenJio'
 })
 
 export default router

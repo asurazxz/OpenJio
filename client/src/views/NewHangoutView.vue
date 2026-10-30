@@ -10,6 +10,7 @@ import { fmtDateKey } from '../lib/time.js'
 import { toast } from '../lib/toast.js'
 import { sgDateKey, sgParts, fromDateKey, DAY, MIN } from '../lib/time.js'
 import { toastError } from '../lib/toast.js'
+import { useUnsavedChanges } from '../composables/useUnsavedChanges.js'
 
 const route = useRoute()
 const router = useRouter()
@@ -69,6 +70,8 @@ const form = ref({
 })
 const submitting = ref(false)
 const errors = ref({})
+const originalForm = JSON.stringify(form.value)
+useUnsavedChanges(() => !created.value && !submitting.value && JSON.stringify(form.value) !== originalForm, 'Leave without saving this new plan?')
 const minDate = sgDateKey(today)
 
 const placeholder = computed(() => ({ group: 'Friday makan…', solo: 'Free afternoon…', public: 'Sunday hawker crawl…' })[mode.value])
@@ -230,7 +233,7 @@ async function submit() {
         </li>
       </ol>
 
-      <form class="card-x form-card" novalidate @submit.prevent="submit">
+      <form data-tour="create-form" class="card-x form-card" novalidate @submit.prevent="submit">
         <Transition name="oj-step" mode="out-in">
           <div v-if="step === 0" key="what">
             <h2 ref="stepHeading" tabindex="-1" class="step-title">What's the plan?</h2>

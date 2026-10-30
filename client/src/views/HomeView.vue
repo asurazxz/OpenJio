@@ -6,7 +6,6 @@ import { fmtRange, fmtDateKey, toMs } from '../lib/time.js'
 import { STAGE_LABEL, interestLabel } from '../lib/labels.js'
 import UserAvatar from '../components/UserAvatar.vue'
 import EmptyState from '../components/EmptyState.vue'
-import WashiHeading from '../components/brand/WashiHeading.vue'
 import SteamDoodle from '../components/brand/SteamDoodle.vue'
 import CategoryIcon from '../components/brand/CategoryIcon.vue'
 import ListingCard from '../components/ListingCard.vue'
@@ -76,8 +75,8 @@ const greeting = computed(() => {
       <SteamDoodle class="hello-art" :size="84" />
     </header>
 
-    <section class="starters" aria-label="Start something">
-      <RouterLink to="/new?mode=group" class="starter s-create">
+    <section class="starters" aria-label="Start something" data-tour="home-start">
+      <RouterLink to="/new?mode=group" data-tour="home-create" class="starter s-create">
         <span class="s-ico" aria-hidden="true"><CategoryIcon name="plus" :size="30" /></span>
         <span class="s-title">Create a jio</span>
         <span class="s-sub">Pick a few days, see who is free, plan it together.</span>
@@ -93,11 +92,11 @@ const greeting = computed(() => {
         <span class="s-sub">Places, events and deals near you.</span>
       </RouterLink>
     </section>
-    <p class="also">
-      <RouterLink to="/new?mode=solo">Plan a free afternoon for yourself</RouterLink>
-      <span aria-hidden="true" class="sep">/</span>
-      <RouterLink to="/new?mode=public">Host an open jio</RouterLink>
-    </p>
+    <nav class="also" aria-label="More ways to plan" data-tour="home-options">
+      <span class="small muted">Going your own way?</span>
+      <RouterLink to="/new?mode=solo" class="btn btn-secondary btn-sm">Plan solo <span aria-hidden="true">↗</span></RouterLink>
+      <RouterLink to="/new?mode=public" class="btn btn-secondary btn-sm">Host an open jio <span aria-hidden="true">↗</span></RouterLink>
+    </nav>
 
     <div v-if="loading" class="py-5 text-center"><span class="spinner-border" aria-label="Loading"></span></div>
     <div v-else-if="error" class="notice danger"><p>{{ error.message }}</p></div>
@@ -140,7 +139,7 @@ const greeting = computed(() => {
 
       <section v-if="openJios.length || happening.length" class="group" aria-labelledby="g-open">
         <div class="d-flex justify-content-between align-items-baseline gap-3 mb-3">
-          <WashiHeading id="g-open" tone="pink" class="group-title m-0">What's happening?</WashiHeading>
+          <h2 id="g-open" class="group-title m-0">What's happening?</h2>
           <RouterLink to="/discover" class="small fw-bold">See all in Discover</RouterLink>
         </div>
         <ul class="hangouts">
@@ -210,7 +209,7 @@ const greeting = computed(() => {
 .s-discover .s-ico { color: var(--mustard-ink); transform: rotate(-2deg); }
 .s-title { font-family: var(--font-display); font-weight: 900; font-size: 1.25rem; line-height: 1.2; }
 .s-sub { color: var(--ink-2); font-size: 0.92rem; }
-.also { margin: 0 0 32px; font-size: 0.92rem; font-weight: 600; display: flex; flex-wrap: wrap; gap: 4px 10px; }
+.also { margin: 14px 0 32px; font-size: 0.92rem; font-weight: 600; display: flex; align-items: center; flex-wrap: wrap; gap: 8px 10px; }
 .also .sep { color: var(--line-strong); }
 .group { margin-bottom: 32px; }
 .group-title { font-size: 1.25rem; margin-bottom: 12px; display: inline-flex; align-items: center; gap: 8px; }

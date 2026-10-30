@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test'
 
 async function signInAs(page, name) {
+  await page.addInitScript(() => localStorage.setItem('openjio:onboarding:v1', 'done'))
   await page.goto('/signin')
   await page.getByRole('button', { name }).click()
   await expect(page.getByRole('heading', { level: 1, name: /^(Kopi first|Free later|Jio makan), / })).toBeVisible()

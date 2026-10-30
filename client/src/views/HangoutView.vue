@@ -1,7 +1,9 @@
 <script setup>
 import { ref, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { getHangout, previewHangout } from '../api/index.js'
+import { getHangout, previewHangout, setStage } from '../api/index.js'
+import { toast, toastError } from '../lib/toast.js'
+import EditHangoutDialog from '../components/EditHangoutDialog.vue'
 import { useLive } from '../composables/useLive.js'
 import { fmtRange, fmtDateKey } from '../lib/time.js'
 import { STAGE_LABEL, interestLabel } from '../lib/labels.js'
@@ -15,7 +17,12 @@ import EmptyState from '../components/EmptyState.vue'
 
 const route = useRoute()
 const router = useRouter()
-const { data: detail, error } = useLive(() => getHangout(route.params.id))
+const { data: detail, error, reload } = useLive(() => getHangout(route.params.id))
+const editing = ref(false)
+async function cancelHangout() {
+  if (!window.confirm('Cancel this hangout for everyone?')) return
+  try { await setStage(h.value.id, 'cancelled'); toast('Hangout cancelled') } catch (e) { toastError(e) }
+}
 
 const h = computed(() => detail.value?.hangout)
 
@@ -77,6 +84,7 @@ function onTabKey(e, i) {
 <template>
   <div class="page">
     <EmptyState v-if="error" :title="error.code === 'forbidden' ? 'This hangout is private' : 'Hangout not found'" :body="error.message" tone="tomato">
+      <button v-if="!['forbidden', 'not_found'].includes(error.code)" type="button" class="btn btn-secondary" @click="reload">Try again</button>
       <RouterLink to="/" class="btn btn-secondary">Back to your plans</RouterLink>
     </EmptyState>
 
@@ -103,6 +111,12 @@ function onTabKey(e, i) {
         </div>
       </header>
 
+      <div v-if="h.myRole === 'host' && !['ended', 'cancelled'].includes(h.stage)" class="d-flex flex-wrap gap-2 mb-3">
+        <button type="button" class="btn btn-secondary btn-sm" @click="editing = true">Edit details</button>
+        <button v-if="['collecting', 'voting'].includes(h.stage)" type="button" class="btn btn-ghost btn-sm text-danger" @click="cancelHangout">Cancel hangout</button>
+      </div>
+      <EditHangoutDialog :open="editing" :hangout="h" @close="editing = false" />
+
       <div v-if="justCreated && h.mode !== 'solo' && h.stage === 'collecting'" class="notice teal mb-3">
         <p><strong>Created.</strong> Share the invite link with your friends, then mark your own free times below.</p>
       </div>
@@ -113,7 +127,7 @@ function onTabKey(e, i) {
 
       <div class="layout">
         <div class="main-col">
-          <div class="tabs" role="tablist" aria-label="Hangout sections">
+          <div class="tabs" data-tour="hangout-stages" role="tablist" aria-label="Hangout sections">
             <button
               v-for="(t, i) in tabs"
               :id="`tab-${t.key}`"

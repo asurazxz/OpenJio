@@ -9,8 +9,10 @@
       (function () {
         var t = null
         try { t = localStorage.getItem('openjio:theme') } catch (e) {}
+        if (['system', 'light', 'dark'].indexOf(t) === -1) t = 'system'
         var d = t === 'dark' || ((!t || t === 'system') && matchMedia('(prefers-color-scheme: dark)').matches)
-        if (t === 'dark' || t === 'light') document.documentElement.setAttribute('data-theme', t)
+        document.documentElement.setAttribute('data-theme', d ? 'dark' : 'light')
+        document.documentElement.setAttribute('data-theme-choice', t)
         document.documentElement.setAttribute('data-bs-theme', d ? 'dark' : 'light')
       })()
     </script>
