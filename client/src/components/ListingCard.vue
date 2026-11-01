@@ -24,6 +24,10 @@ const age = computed(() => {
   return t ? fmtAge(t) : null
 })
 const icon = computed(() => (l.value.interests || [])[0] || l.value.type)
+const MISSING_LABEL = { dates: 'Dates not stated', times: 'Times not stated', location: 'Location not stated', source: 'Source not stated' }
+const missingChips = computed(() => (l.value.autoPublished ? l.value.missing || [] : []).map((m) => MISSING_LABEL[m]).filter(Boolean))
+const isOsm = computed(() => l.value.source?.kind === 'osm')
+const sourceText = computed(() => (isOsm.value ? 'OpenStreetMap via Geoapify' : sourceLine(l.value)))
 const spots = computed(() => (l.value.type === 'hangout' && l.value.capacity ? Math.max(0, l.value.capacity - l.value.memberCount) : null))
 </script>
 
@@ -40,7 +44,10 @@ const spots = computed(() => (l.value.type === 'hangout' && l.value.capacity ? M
     <p v-if="l.type === 'deal' && l.dealText" class="deal-text">{{ l.dealText }}<span v-if="l.merchant" class="muted"> at {{ l.merchant }}</span></p>
     <p v-if="!compact" class="summary">{{ l.summary }}</p>
     <p v-if="when" class="when">{{ when }}</p>
+    <p v-if="l.durationDefault" class="small muted">Typical visit ~{{ l.durationMins }} min (default)</p>
     <div class="meta">
+      <span v-if="l.autoPublished" class="tag auto-tag">Auto-extracted · not reviewed</span>
+      <span v-for="chip in missingChips" :key="chip" class="tag missing-tag">{{ chip }}</span>
       <span v-if="l.routeReady === false" class="tag">Visit details incomplete</span>
       <span v-for="i in (l.interests || []).slice(0, 2)" :key="i" class="tag">{{ interestLabel(i) }}</span>
       <span v-if="l.priceText" class="tag">{{ l.priceText }}</span>
@@ -50,9 +57,11 @@ const spots = computed(() => (l.value.type === 'hangout' && l.value.capacity ? M
       <span v-if="l.type !== 'hangout' && !l.openingHours && l.type !== 'event'" class="tag">Hours not verified</span>
     </div>
     <div class="foot">
-      <span class="source small" :class="{ sample: l.source?.kind === 'curated' }" :title="l.source?.url || ''">{{ sourceLine(l) }}<template v-if="age && l.source?.kind !== 'curated'">, checked {{ age }}</template></span>
+      <span class="source small" :class="{ sample: l.source?.kind === 'curated' }" :title="l.source?.url || ''">{{ sourceText }}<template v-if="age && l.source?.kind !== 'curated'">, checked {{ age }}</template></span>
       <slot name="actions">
-        <button type="button" class="btn btn-secondary btn-sm" @click="$emit('add', l)">
+        <!-- Auto-extracted listings are view-only, so they link to their source instead. -->
+        <a v-if="l.autoPublished" :href="l.source?.url" target="_blank" rel="noopener noreferrer" class="btn btn-secondary btn-sm">View post</a>
+        <button v-else type="button" class="btn btn-secondary btn-sm" @click="$emit('add', l)">
           {{ l.type === 'hangout' ? 'View' : 'Add to plan' }}
         </button>
       </slot>
@@ -117,5 +126,7 @@ const spots = computed(() => (l.value.type === 'hangout' && l.value.capacity ? M
   padding: 1px 8px;
   border-radius: 999px;
 }
+.auto-tag { background: var(--mustard-soft); color: var(--mustard-ink); font-weight: 700; }
+.missing-tag { background: var(--paper-2); color: var(--ink-2); font-size: .78rem; }
 .compact { padding: 14px; }
 </style>

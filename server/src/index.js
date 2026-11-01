@@ -7,7 +7,10 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as onemap from './onemap.js';
 import { createPlaceSearch } from './places.js';
+import { createPlacesCatalogue } from './places-catalogue.js';
 import { loadCache, getCached, setCached, routeKey, flushCacheSync } from './cache.js';
+import { createIngestScheduler, parseIntervalHours, resolvePython, countDrafts } from './ingest.js';
+import { AREAS } from '../../client/src/data/seed-listings.js';
 import {
   InputError,
   parseLatLng,
@@ -21,9 +24,56 @@ const DRAFTS_FILE = path.resolve(here, '../../pipeline/out/drafts.json');
 const ALLOWED_ORIGINS = new Set(['http://localhost:5173', 'http://127.0.0.1:5173', ...(process.env.ALLOWED_ORIGINS || '').split(',').map(s => s.trim()).filter(Boolean)]);
 const sharedMode = process.env.DATA_MODE === 'supabase';
 const repository = createSupabaseRepository({ url: process.env.SUPABASE_URL, key: process.env.SUPABASE_SERVICE_ROLE_KEY });
-const hosted = createHostedService({ repository, verifyToken: token => repository.verifyToken(token), readDrafts, travel: createPlanningTravel });
+// Built only when GEOAPIFY_API_KEY is set; without it list() returns [].
+let placesCatalogue;
+try {
+  placesCatalogue = createPlacesCatalogue({ apiKey: process.env.GEOAPIFY_API_KEY, areas: AREAS });
+} catch (err) {
+  console.error('Places catalogue unavailable:', err?.message);
+  placesCatalogue = {
+    list: () => [],
+    status: () => ({ count: 0, refreshedAt: null, refreshing: false, lastError: 'unavailable' }),
+    refresh: async () => {},
+    start() {},
+    stop() {},
+  };
+}
+const hosted = createHostedService({
+  repository,
+  verifyToken: token => repository.verifyToken(token),
+  readDrafts,
+  travel: createPlanningTravel,
+  fetchPlaces: async () => placesCatalogue.list(),
+});
 const PORT = Number(process.env.PORT) || 8787;
 const places = createPlaceSearch();
+
+// Scheduled pipeline runs. Only started when INGEST_ENABLED=true; a manual
+// POST /api/ingest/run works in either case.
+const ingestEnabled = process.env.INGEST_ENABLED === 'true';
+const ingestIntervalHours = parseIntervalHours(process.env.INGEST_INTERVAL_HOURS);
+const ingestLimit = Math.max(1, Math.floor(Number(process.env.INGEST_LIMIT)) || 15);
+const repoRoot = path.resolve(here, '../..');
+const ingest = createIngestScheduler({
+  intervalMs: ingestIntervalHours * 60 * 60 * 1000,
+  python: () => resolvePython({ repoRoot }),
+  runArgs: [path.join(repoRoot, 'pipeline', 'run.py'), '--limit', String(ingestLimit)],
+  draftsFile: DRAFTS_FILE,
+  geocode: onemap.isConfigured() ? query => onemap.search(query) : null,
+  areas: AREAS,
+  cwd: repoRoot,
+});
+
+async function ingestStatus() {
+  const counts = await countDrafts(DRAFTS_FILE);
+  return {
+    enabled: ingestEnabled,
+    intervalHours: ingestIntervalHours,
+    ...ingest.status(),
+    autoPublished: counts.autoPublished,
+    drafts: counts.drafts,
+  };
+}
 
 // The pipeline stores drafts keyed by id; the domain engine expects a list.
 async function readDrafts() {
@@ -117,11 +167,23 @@ app.get('/api/health', async (req, res) => {
     onemap: onemapStatus,
     gemini: Boolean(process.env.GEMINI_API_KEY),
     geoapify: places.status().configured,
+    placesCatalogue: placesCatalogue.status(),
     drafts,
+    ingest: {
+      enabled: ingestEnabled,
+      lastFinishedAt: ingest.status().lastFinishedAt,
+      lastError: ingest.status().lastError,
+    },
   });
 });
 
 app.get('/api/places/status', (req, res) => res.json(places.status()));
+// Public and cacheable. Registered before the places sign-in and rate-limit middleware.
+app.get('/api/places/catalogue', (req, res) => {
+  res.set('Cache-Control', 'max-age=300');
+  res.json(placesCatalogue.list());
+});
+app.get('/api/places/catalogue/status', (req, res) => res.json(placesCatalogue.status()));
 app.use('/api/places',
   requireSignIn('Please sign in to search for places.'),
   limitPerMinute(30, 'places_limit', 'Too many place searches. Please wait a minute or enter the place manually.'));
@@ -169,6 +231,23 @@ app.get('/api/ingest/drafts', async (req, res) => {
   res.json(await readDrafts());
 });
 
+// Public: the status holds no secrets (log lines are redacted by the scheduler).
+app.get('/api/ingest/status', async (req, res) => {
+  res.json(await ingestStatus());
+});
+
+// Shared mode: only a signed-in reviewer may trigger a run. The reviewer check
+// reuses listDrafts, which the engine already restricts to reviewers.
+app.post('/api/ingest/run', async (req, res) => {
+  if (sharedMode) {
+    const authorization = req.get('Authorization') || '';
+    if (!/^Bearer [^\s]+$/.test(authorization)) return res.status(401).json({ error: 'auth', message: 'Please sign in to run ingestion.' });
+    await hosted.execute({ token: authorization.slice(7), operation: 'listDrafts', args: [] });
+  }
+  if (!ingest.runNow()) return res.status(409).json({ error: 'busy', message: 'An ingest run is already in progress.' });
+  res.status(202).json(await ingestStatus());
+});
+
 app.use((req, res) => {
   res.status(404).json({ error: 'not_found' });
 });
@@ -207,12 +286,23 @@ app.use((err, req, res, next) => {
 });
 
 loadCache();
+try {
+  placesCatalogue.start();
+} catch (err) {
+  console.error('Places catalogue did not start:', err?.message);
+}
 const server = app.listen(PORT, () => {
   console.log(`OpenJio server listening on http://localhost:${PORT}`);
+  if (ingestEnabled) {
+    ingest.start();
+    console.log(`Ingest scheduled every ${ingestIntervalHours} h (first run in 60 s)`);
+  }
 });
 
 for (const signal of ['SIGINT', 'SIGTERM']) {
   process.on(signal, () => {
+    ingest.stop();
+    placesCatalogue.stop();
     flushCacheSync();
     server.close();
     process.exit(0);

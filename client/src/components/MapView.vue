@@ -1,7 +1,11 @@
 <script setup>
 // Leaflet map on OneMap tiles. Markers are numbered or dotted pins; a route line joins them when `path` is set.
+// With `cluster`, nearby pins merge into numbered bubbles when zoomed out (Leaflet.markercluster 1.5.3, MIT,
+// by Dave Leaver and contributors: https://github.com/Leaflet/Leaflet.markercluster). Only Discover sets it.
 import { onMounted, onBeforeUnmount, ref, watch, nextTick } from 'vue'
 import L from 'leaflet'
+import 'leaflet.markercluster/dist/MarkerCluster.css'
+import 'leaflet.markercluster/dist/MarkerCluster.Default.css'
 
 const props = defineProps({
   markers: { type: Array, default: () => [] }, // { id, lat, lng, label?, tone?, title?, active? }
@@ -11,12 +15,14 @@ const props = defineProps({
   scrollWheelZoom: { type: Boolean, default: false },
   trackLayout: { type: Boolean, default: false },
   dark: { type: Boolean, default: false },
+  cluster: { type: Boolean, default: false }, // read once at mount
 })
 const emit = defineEmits(['select', 'layout', 'interact'])
 
 const el = ref(null)
 let map = null
 let layer = null
+let clusterGroup = null
 let ro = null
 let geometry = ''
 const markerLayers = new Map()
@@ -45,6 +51,36 @@ function icon(m) {
   })
 }
 
+function clusterIcon(cluster) {
+  const count = cluster.getChildCount()
+  const size = count < 10 ? 'small' : count < 100 ? 'medium' : 'large'
+  const px = { small: 40, medium: 46, large: 52 }[size]
+  return L.divIcon({
+    className: `marker-cluster marker-cluster-${size} oj-cluster`,
+    html: `<div class="oj-cluster-in"><span>${count}</span></div>`,
+    iconSize: L.point(px, px),
+  })
+}
+
+// Bubbles are plain divs, so give them a name and keyboard access after each (re)render.
+const keyedBubbles = new WeakSet()
+function labelClusters() {
+  if (!map) return
+  for (const bubble of map.getContainer().querySelectorAll('.oj-cluster')) {
+    const count = bubble.textContent.trim()
+    bubble.setAttribute('role', 'button')
+    bubble.setAttribute('tabindex', '0')
+    bubble.setAttribute('aria-label', `${count} places in this area. Zoom in to see them.`)
+    if (keyedBubbles.has(bubble)) continue
+    keyedBubbles.add(bubble)
+    bubble.addEventListener('keydown', (event) => {
+      if (!['Enter', ' '].includes(event.key)) return
+      event.preventDefault()
+      bubble.click()
+    })
+  }
+}
+
 function draw() {
   if (!map) return
   const nextGeometry = JSON.stringify([props.start && [props.start.lat, props.start.lng], props.markers.map((m) => [m.id, m.lat, m.lng, m.label, m.tone, m.title, m.preview]), props.path])
@@ -56,7 +92,9 @@ function draw() {
   }
   geometry = nextGeometry
   layer.clearLayers()
+  clusterGroup?.clearLayers()
   markerLayers.clear()
+  const pinTarget = clusterGroup || layer
   const pts = []
   if (props.start) {
     const s = L.marker([props.start.lat, props.start.lng], {
@@ -96,10 +134,11 @@ function draw() {
       emit('select', m.id)
     })
     mk.on('add', () => mk.getElement()?.setAttribute('aria-label', m.title || 'Open location details'))
-    mk.addTo(layer)
+    mk.addTo(pinTarget)
     markerLayers.set(m.id, mk)
     pts.push([m.lat, m.lng])
   }
+  labelClusters()
   if (props.path && pts.length > 1) {
     L.polyline(pts, { color: getComputedStyle(el.value).getPropertyValue('--ink').trim() || '#2a1f17', weight: 3, dashArray: '2 8', lineCap: 'round' }).addTo(layer)
   }
@@ -112,6 +151,12 @@ onMounted(async () => {
   await nextTick()
   // The component may have been unmounted while waiting.
   if (!el.value) return
+  if (props.cluster) {
+    // The plugin reads the global Leaflet object, so expose ours before loading it.
+    window.L ??= L
+    await import('leaflet.markercluster')
+    if (!el.value) return
+  }
   map = L.map(el.value, {
     maxBounds: SG_BOUNDS.pad(0.1),
     minZoom: 11,
@@ -129,6 +174,19 @@ onMounted(async () => {
       '<a href="https://www.onemap.gov.sg/" target="_blank" rel="noopener noreferrer">OneMap</a> &copy; contributors | <a href="https://www.sla.gov.sg/" target="_blank" rel="noopener noreferrer">Singapore Land Authority</a>',
   }).addTo(map)
   layer = L.layerGroup().addTo(map)
+  if (props.cluster) {
+    const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches
+    clusterGroup = L.markerClusterGroup({
+      maxClusterRadius: 48,
+      showCoverageOnHover: false,
+      spiderfyOnMaxZoom: true,
+      animate: !reduceMotion,
+      animateAddingMarkers: false,
+      iconCreateFunction: clusterIcon,
+    }).addTo(map)
+    clusterGroup.on('animationend', labelClusters)
+    map.on('zoomend moveend', labelClusters)
+  }
   map.on('move zoom resize', reportLayout)
   draw()
   reportLayout()
@@ -145,6 +203,7 @@ onBeforeUnmount(() => {
   ro?.disconnect()
   map?.remove()
   map = null
+  clusterGroup = null
   markerLayers.clear()
 })
 
@@ -212,5 +271,38 @@ defineExpose({ invalidate: () => map?.invalidateSize(), focusMarker: id => marke
 :root[data-theme='dark'] .map-x .leaflet-tile-pane { filter: invert(0.9) hue-rotate(180deg) sepia(0.35) brightness(0.85) contrast(0.9); }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) .map-x .leaflet-tile-pane { filter: invert(0.9) hue-rotate(180deg) sepia(0.35) brightness(0.85) contrast(0.9); }
+}
+
+/* Cluster bubbles (Leaflet.markercluster). They replace its default green and yellow with an orange fill
+   and white numerals (about 7:1 on the light fill, 5:1 on the dark one) and a teal halo. The dark fill is
+   set explicitly because --oj-orange-ink flips to a pale tint in dark mode, where white text would fail. */
+.map-x { --cluster-fill: var(--oj-orange-ink); }
+:root[data-theme='dark'] .map-x { --cluster-fill: #C2410C; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .map-x { --cluster-fill: #C2410C; }
+}
+.map-x .marker-cluster-small, .map-x .marker-cluster-medium, .map-x .marker-cluster-large {
+  background-color: color-mix(in srgb, var(--teal) 35%, transparent);
+  border-radius: 50%;
+}
+.map-x .marker-cluster-small div, .map-x .marker-cluster-medium div, .map-x .marker-cluster-large div {
+  background-color: var(--cluster-fill);
+  box-shadow: 0 0 0 3px var(--card), 0 3px 8px rgba(var(--oj-shadow-rgb), 0.25);
+}
+.map-x .oj-cluster .oj-cluster-in {
+  display: grid;
+  place-items: center;
+  width: calc(100% - 8px);
+  height: calc(100% - 8px);
+  margin: 4px;
+  border-radius: 50%;
+  color: #fff;
+}
+.map-x .oj-cluster-in span { line-height: 1; font: 800 14px/1 var(--font-display); }
+.map-x .oj-cluster:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) {
+  .map-x .leaflet-cluster-anim .leaflet-marker-icon,
+  .map-x .leaflet-cluster-anim .leaflet-marker-shadow,
+  .map-x .leaflet-cluster-spider-leg { transition: none !important; }
 }
 </style>

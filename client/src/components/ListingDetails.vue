@@ -11,19 +11,28 @@ const hours = (windows) => windows?.length ? windows.map(([a, b]) => `${a} – $
 const sourceUrl = computed(() => {
   try { const u = new URL(props.listing.source?.url); return ['https:', 'http:'].includes(u.protocol) ? u.href : '' } catch { return '' }
 })
-const directions = computed(() => Number.isFinite(props.listing.lat) && Number.isFinite(props.listing.lng)
+const directions = computed(() => props.listing.locationKnown !== false && Number.isFinite(props.listing.lat) && Number.isFinite(props.listing.lng)
   ? `https://www.google.com/maps/search/?api=1&query=${props.listing.lat},${props.listing.lng}` : '')
+const MISSING_LABEL = { dates: 'Dates not stated', times: 'Times not stated', location: 'Location not stated', source: 'Source not stated' }
+const missingChips = computed(() => (props.listing.autoPublished ? props.listing.missing || [] : []).map((m) => MISSING_LABEL[m]).filter(Boolean))
+const sourceText = computed(() => (props.listing.source?.kind === 'osm' ? 'OpenStreetMap via Geoapify' : sourceLine(props.listing)))
 </script>
 
 <template>
   <article class="listing-details">
-    <p v-if="listing.routeReady === false" class="notice small">This listing is available to browse, but its visit details are incomplete. It can be saved to a shortlist; it cannot yet be added as an itinerary stop.</p>
+    <p v-if="listing.routeReady === false && !listing.autoPublished" class="notice small">This listing is available to browse, but its visit details are incomplete. It can be saved to a shortlist; it cannot yet be added as an itinerary stop.</p>
+    <p v-if="listing.autoPublished" class="auto-note small">
+      <span class="tag auto-tag">Auto-extracted · not reviewed</span>
+      Pulled automatically from {{ listing.source?.name || 'a public source' }} and checked for dates and location only. Confirm details with the source before you go.
+      <span v-if="listing.autoNote">{{ listing.autoNote }}</span>
+      <a v-if="sourceUrl" :href="sourceUrl" target="_blank" rel="noopener noreferrer">Original post <span aria-hidden="true">↗</span></a>
+    </p>
     <div class="detail-intro">
       <div class="category-art" aria-hidden="true"><CategoryIcon :name="listing.interests?.[0] || 'outdoors'" :size="40" /></div>
       <div>
         <div class="chip-row mb-2"><span class="tag" :class="TYPE_TONE[listing.type]">{{ TYPE_LABEL[listing.type] }}</span><span class="small muted">{{ areaLabel(listing.area) }}</span></div>
         <p class="intro-copy">{{ listing.summary }}</p>
-        <div class="chip-row"><span v-for="interest in listing.interests" :key="interest" class="tag">{{ interestLabel(interest) }}</span></div>
+        <div class="chip-row"><span v-for="interest in listing.interests" :key="interest" class="tag">{{ interestLabel(interest) }}</span><span v-for="chip in missingChips" :key="chip" class="tag missing-tag">{{ chip }}</span></div>
       </div>
     </div>
 
@@ -35,18 +44,20 @@ const directions = computed(() => Number.isFinite(props.listing.lat) && Number.i
         <div v-if="listing.startsAt"><dt>When</dt><dd>{{ fmtRange(toMs(listing.startsAt), toMs(listing.endsAt)) }}</dd></div>
         <div v-else-if="listing.validity?.dateFrom && listing.validity?.dateTo"><dt>Deal dates</dt><dd>{{ fmtDateKey(listing.validity.dateFrom) }} – {{ fmtDateKey(listing.validity.dateTo) }}</dd></div>
       </dl>
+      <p v-if="listing.durationDefault" class="small muted visit-note">Typical visit ~{{ listing.durationMins }} min (default)</p>
     </section>
 
     <div class="detail-columns">
       <section class="detail-section">
         <h3>Where you'll go</h3>
-        <p class="address">{{ listing.address || 'Exact address not confirmed' }}</p>
+        <p class="address">{{ listing.address || (listing.locationKnown === false ? 'Location not stated' : 'Exact address not confirmed') }}</p>
         <ul v-if="listing.outlets?.length > 1" class="outlets"><li v-for="(outlet, i) in listing.outlets" :key="i"><strong>{{ outlet.name }}</strong><br />{{ outlet.address }}</li></ul>
         <a v-if="directions" :href="directions" target="_blank" rel="noopener noreferrer" class="location-link">Open location <span aria-hidden="true">↗</span></a>
         <template v-if="listing.type !== 'event' && listing.type !== 'hangout'">
           <h3 class="mt-4">Opening hours</h3>
           <dl v-if="listing.openingHours" class="hours"><div v-for="[key, label] in days" :key="key"><dt>{{ label }}</dt><dd>{{ hours(listing.openingHours[key]) }}</dd></div></dl>
-          <p v-else class="notice small">Hours haven't been confirmed. This listing won't be added automatically to a generated plan.</p>
+          <p v-if="listing.openingHoursText" class="small muted listed-hours">Listed hours: {{ listing.openingHoursText }}</p>
+          <p v-if="!listing.openingHours && !listing.openingHoursText" class="notice small">Hours haven't been confirmed. This listing won't be added automatically to a generated plan.</p>
         </template>
       </section>
 
@@ -61,12 +72,13 @@ const directions = computed(() => Number.isFinite(props.listing.lat) && Number.i
         <ul v-if="listing.conditions?.length"><li v-for="condition in listing.conditions" :key="condition">{{ condition }}</li></ul>
         <p v-else class="small muted">Check the original listing for booking requirements and any conditions before heading out.</p>
         <p v-if="listing.exclusions?.length" class="small"><strong>Not valid:</strong> {{ listing.exclusions.join('; ') }}</p>
-        <div class="provenance"><span class="small muted">{{ sourceLine(listing) }}</span><a v-if="sourceUrl" :href="sourceUrl" target="_blank" rel="noopener noreferrer">{{ listing.type === 'event' ? 'Booking and original details' : 'View original details' }} <span aria-hidden="true">↗</span></a></div>
+        <div class="provenance"><span class="small muted">{{ sourceText }}</span><a v-if="sourceUrl" :href="sourceUrl" target="_blank" rel="noopener noreferrer">{{ listing.type === 'event' ? 'Booking and original details' : 'View original details' }} <span aria-hidden="true">↗</span></a></div>
       </section>
     </div>
 
     <p v-if="listing.sample" class="sample-note">Sample listing. Hours and prices are approximate; event and deal names are made up.</p>
-    <footer class="detail-actions"><span class="small muted">{{ listing.type === 'hangout' ? 'See the plan and who is going.' : 'Save this idea to a plan’s shortlist. It does not make a booking.' }}</span><button type="button" class="btn btn-primary" @click="$emit('add')">{{ listing.type === 'hangout' ? 'View open jio' : 'Add to a plan' }}</button></footer>
+    <footer v-if="listing.autoPublished" class="detail-actions"><span class="small muted">Not reviewed yet, so it can’t be added to a plan. Check the original post for details.</span><a :href="listing.source?.url" target="_blank" rel="noopener noreferrer" class="btn btn-primary">View original post</a></footer>
+    <footer v-else class="detail-actions"><span class="small muted">{{ listing.type === 'hangout' ? 'See the plan and who is going.' : 'Save this idea to a plan’s shortlist. It does not make a booking.' }}</span><button type="button" class="btn btn-primary" @click="$emit('add')">{{ listing.type === 'hangout' ? 'View open jio' : 'Add to a plan' }}</button></footer>
   </article>
 </template>
 
@@ -89,6 +101,12 @@ dd { margin: 4px 0 0; font-weight: 700; }
 .offer { padding: 12px; border-left: 3px solid var(--mustard); background: var(--mustard-soft); border-radius: 0 10px 10px 0; }
 .outlets { padding-left: 20px; font-size: .9rem; }
 .provenance { display: grid; gap: 8px; margin-top: 20px; padding-top: 14px; border-top: 1px dashed var(--line); font-size: .85rem; }
+.auto-note { display: grid; gap: 8px; justify-items: start; background: var(--mustard-soft); color: var(--mustard-ink); border-radius: 12px; padding: 12px 14px; margin: 0 0 20px; }
+.auto-note a { color: inherit; font-weight: 700; }
+.auto-tag { background: var(--mustard-soft); color: var(--mustard-ink); font-weight: 700; }
+.missing-tag { background: var(--paper-2); color: var(--ink-2); font-size: .78rem; }
+.visit-note { margin: 12px 0 0; }
+.listed-hours { margin: 10px 0 0; }
 .sample-note { font-size: .8rem; color: var(--ink-2); margin: 20px 0 0; }
 .detail-actions { display: flex; gap: 16px; align-items: center; justify-content: space-between; padding-top: 18px; margin-top: 18px; border-top: 1px solid var(--line); }
 .detail-actions span { max-width: 35ch; }

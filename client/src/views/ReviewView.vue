@@ -333,9 +333,11 @@ async function publish() {
                   <span class="tag" :class="d.type === 'event' ? 'tag-plum' : 'tag-mustard'">{{ d.type === 'event' ? 'Event' : 'Deal' }}</span>
                   <span class="tag" :class="d.extractor === 'gemini' ? 'tag-teal' : null">{{ extractorLabel(d) }}</span>
                   <span v-if="d.review" class="tag">{{ d.review.status === 'published' ? 'Published' : 'Rejected' }}</span>
+                  <span v-else-if="d.autoLive" class="tag tag-mustard">Live on Discover (auto)</span>
                 </div>
 
                 <h3 :id="`d-${d.id}`" class="draft-title">{{ d.title || 'Untitled' }}</h3>
+                <p v-if="!d.review && d.autoPublish === false && d.autoReason" class="small muted m-0">Not auto-published: {{ d.autoReason }}</p>
                 <p class="small m-0">{{ d.merchant || 'No merchant' }}</p>
                 <p class="small muted m-0">
                   From {{ d.source?.name || 'unknown source' }}<template v-if="postedText(d)">, posted {{ postedText(d) }}</template>

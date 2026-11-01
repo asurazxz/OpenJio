@@ -3,14 +3,25 @@ import { rankSlots, earliestCommonSlot, heatmap, mergeIntervals } from '../lib/a
 import { generateItinerary, greedyItinerary, retime, alternativesFor } from '../lib/algo/itinerary.js'
 import { joinSuggestions } from '../lib/algo/reachability.js'
 import { isVerifiedDeal } from '../lib/algo/validity.js'
-import { fromDateKey, toMs, toIso, DAY, MIN } from '../lib/time.js'
+import { fromDateKey, toMs, toIso, sgDateKey, DAY, MIN } from '../lib/time.js'
 import { assessSlot } from '../lib/slot-assessment.js'
 import { customPlace } from '../lib/custom-place.js'
+import { preparePublication } from '../lib/review.js'
+
+// How long fetched pipeline drafts are reused before asking the server again.
+const AUTO_DRAFTS_TTL_MS = 60 * 1000
+// Live places are reused for 10 minutes; after a failed fetch the server is retried after 60 seconds.
+const PLACES_TTL_MS = 10 * 60 * 1000
+const PLACES_RETRY_MS = 60 * 1000
+// Gaps the pipeline reports for an automatic listing.
+const AUTO_MISSING = ['dates', 'times', 'location', 'source']
 // One domain implementation for demo persistence and trusted hosted execution.
 // Runtime dependencies own transport, identity, persistence and route lookup.
 export function createApiEngine({
   load, persist, uid, token, getSessionUserId, setSessionUserId, resetDemo,
   reactive = value => value, travelFn, prefetchLegs, fetchDrafts,
+  // Optional live places. placesStorage ({ read, write }) keeps the last good list for offline demo use.
+  fetchPlaces, placesStorage,
   catalogue = DEFAULT_LISTINGS, latency = 90,
 }) {
 const LISTINGS = catalogue
@@ -131,13 +142,115 @@ function openJioListings(s) {
     })
 }
 
-function allListings(s) {
-  return [...LISTINGS, ...s.published, ...openJioListings(s)]
+/* Live places (OpenStreetMap). They live in memory, never in the shared state `s`. */
+const placesState = { at: 0, places: [], retryAt: 0, pending: null }
+const isPlace = (p) => Boolean(p) && typeof p.id === 'string' && p.id.length > 0
+
+function storedPlaces() {
+  try {
+    const list = placesStorage?.read?.()
+    return Array.isArray(list) ? list.filter(isPlace) : []
+  } catch {
+    return []
+  }
+}
+
+async function refreshPlaces() {
+  try {
+    const list = await fetchPlaces()
+    const seen = new Set()
+    const places = Array.isArray(list) ? list.filter((p) => isPlace(p) && !seen.has(p.id) && seen.add(p.id)) : []
+    placesState.places = places
+    placesState.at = Date.now()
+    placesState.retryAt = 0
+    try { placesStorage?.write?.(places) } catch { /* keep the in-memory copy */ }
+  } catch {
+    // Keep serving the last list we had, or the saved one, so plans keep resolving.
+    placesState.retryAt = Date.now() + PLACES_RETRY_MS
+    if (!placesState.places.length) {
+      const stored = storedPlaces()
+      if (stored.length) placesState.places = stored
+    }
+  }
+}
+
+// Refreshes the live place list when it is stale. Never throws.
+async function loadPlaces() {
+  if (!fetchPlaces) return []
+  const fresh = placesState.at && Date.now() - placesState.at < PLACES_TTL_MS
+  if (!fresh && Date.now() >= placesState.retryAt) {
+    placesState.pending ??= refreshPlaces().finally(() => { placesState.pending = null })
+    await placesState.pending
+  }
+  return placesState.places
+}
+
+// Sync read of the cached live places, minus any id already curated or published.
+function livePlaces(s) {
+  if (!placesState.places.length) return []
+  const taken = new Set([...LISTINGS, ...s.published].map((l) => l.id))
+  return placesState.places.filter((p) => !taken.has(p.id))
+}
+
+function allListings(s, auto = []) {
+  return [...LISTINGS, ...s.published, ...livePlaces(s), ...auto, ...openJioListings(s)]
+}
+
+// Auto-published listings are derived at read time and never persisted. They are
+// manual-view-only (routeReady false), so planning code never sees them.
+let autoDraftCache = null
+async function fetchAutoDrafts() {
+  if (!fetchDrafts) return []
+  if (autoDraftCache && Date.now() - autoDraftCache.at < AUTO_DRAFTS_TTL_MS) return autoDraftCache.drafts
+  try {
+    const drafts = await fetchDrafts()
+    autoDraftCache = { at: Date.now(), drafts: Array.isArray(drafts) ? drafts : [] }
+    return autoDraftCache.drafts
+  } catch {
+    // Drafts are optional for the public listing: failing here must not fail the call.
+    return []
+  }
+}
+
+// The listing for one auto-publishable draft, or null when it must not be shown.
+// A reviewer's review entry (publish, reject or retire) always wins over the automatic listing.
+function autoListingFor(draft, s, now) {
+  if (!draft || draft.autoPublish !== true || draft.status === 'retired') return null
+  if (s.reviews[draft.id]) return null
+  // Incomplete drafts stay listed with their gaps. Without a known area there is no location at all.
+  const located = draft.locationKnown !== false && AREAS.some((a) => a.slug === draft.area)
+  const missing = (Array.isArray(draft.missing) ? draft.missing : []).filter((m) => AUTO_MISSING.includes(m))
+  if (!located && !missing.includes('location')) missing.push('location')
+  let listing
+  try {
+    const place = located ? draft : { ...draft, area: null, lat: null, lng: null, address: null }
+    listing = preparePublication({ ...place, routeReady: false }, AREAS, draft.autoCheckedAt, { allowUnlocated: true })
+  } catch {
+    return null
+  }
+  if (listing.type === 'event' && listing.endsAt && Date.parse(listing.endsAt) < now) return null
+  if (listing.type === 'deal' && listing.validity?.dateTo && listing.validity.dateTo < sgDateKey(now)) return null
+  return {
+    ...listing, reviewStatus: 'auto-extracted', autoPublished: true,
+    locationKnown: located, missing, autoNote: typeof draft.autoNote === 'string' ? draft.autoNote : null,
+  }
+}
+
+function autoListings(drafts, s, now = Date.now()) {
+  const taken = new Set([...LISTINGS, ...s.published].map((l) => l.id))
+  const out = []
+  for (const draft of drafts) {
+    const listing = autoListingFor(draft, s, now)
+    if (!listing || taken.has(listing.id)) continue
+    taken.add(listing.id)
+    out.push(listing)
+  }
+  return out
 }
 
 /** Listings usable as itinerary stops (not open jios, not drafts). */
 function stopCandidates(s) {
-  return [...LISTINGS, ...s.published].filter((l) => l.status !== 'draft' && l.routeReady !== false)
+  return [...LISTINGS, ...s.published, ...livePlaces(s)].filter((l) => l.status !== 'draft' && l.routeReady !== false)
 }
 
 function findListing(s, id) {
@@ -150,12 +263,16 @@ function findPlanListing(s, h, id) {
 
 async function listListings() {
   await wait()
-  return clone(allListings(load()))
+  const [drafts] = await Promise.all([fetchAutoDrafts(), loadPlaces()])
+  const s = load()
+  return clone(allListings(s, autoListings(drafts, s)))
 }
 
 async function getListing(id) {
   await wait(40)
-  const l = findListing(load(), id)
+  await loadPlaces()
+  const s = load()
+  const l = findListing(s, id) || autoListings(await fetchAutoDrafts(), load()).find((x) => x.id === id) || null
   if (!l) throw new ApiError('not_found', 'That listing is no longer available.')
   return clone(l)
 }
@@ -658,6 +775,7 @@ function tally(s, stop, memberIds) {
 /** Plan with timings recomputed from the slot, validation issues and vote tallies. */
 async function getPlan(id) {
   await wait()
+  await loadPlaces()
   const user = me()
   const s = load()
   const h = hangoutOrThrow(s, id)
@@ -769,6 +887,7 @@ function writeStops(s, h, listingIds, generatedBy, method) {
 
 async function generatePlan(id, { method = 'beam', relax = null } = {}) {
   await wait(160)
+  await loadPlaces()
   const user = me()
   const s = load()
   const h = hangoutOrThrow(s, id)
@@ -803,6 +922,7 @@ async function generatePlan(id, { method = 'beam', relax = null } = {}) {
 
 async function setPlanStops(id, listingIds) {
   await wait()
+  await loadPlaces()
   const user = me()
   const s = load()
   const h = hangoutOrThrow(s, id)
@@ -831,6 +951,7 @@ function proposedPlace(s, h, data, id) {
 
 async function previewCustomStop(id, data) {
   await wait(40)
+  await loadPlaces()
   const user = me(), s = load(), h = hangoutOrThrow(s, id)
   requireHost(s, h, user)
   const place = proposedPlace(s, h, data, 'custom-preview')
@@ -841,6 +962,7 @@ async function previewCustomStop(id, data) {
 
 async function addCustomStop(id, data) {
   await wait()
+  await loadPlaces()
   const user = me(), s = load(), h = hangoutOrThrow(s, id)
   requireHost(s, h, user)
   const place = proposedPlace(s, h, data, uid('custom'))
@@ -856,6 +978,7 @@ async function addCustomStop(id, data) {
 
 async function getAlternatives(id, index) {
   await wait()
+  await loadPlaces()
   const user = me()
   const s = load()
   const h = hangoutOrThrow(s, id)
@@ -868,6 +991,7 @@ async function getAlternatives(id, index) {
 /** Preview a sequence without saving: used for "check before replacing". */
 async function previewStops(id, listingIds) {
   await wait(40)
+  await loadPlaces()
   const user = me()
   const s = load()
   const h = hangoutOrThrow(s, id)
@@ -894,6 +1018,7 @@ async function vote(id, stopId, value) {
 
 async function finalizePlan(id) {
   await wait()
+  await loadPlaces()
   const user = me()
   const s = load()
   const h = hangoutOrThrow(s, id)
@@ -931,6 +1056,7 @@ async function reopenVoting(id) {
 
 async function addToShortlist(id, listingId) {
   await wait()
+  await loadPlaces()
   const user = me()
   const s = load()
   const h = hangoutOrThrow(s, id)
@@ -1010,9 +1136,11 @@ async function listDrafts() {
   } catch {
     serverError = 'The local server is not running, so new drafts cannot be loaded.'
   }
+  // Which drafts are currently live on Discover without a reviewer decision.
+  const liveAuto = new Set(autoListings(drafts, s).map((l) => l.id))
   return {
     serverError,
-    drafts: drafts.filter((d) => d.status !== 'retired').map((d) => ({ ...d, review: s.reviews[d.id]?.status === 'retired' ? null : s.reviews[d.id] || null })),
+    drafts: drafts.filter((d) => d.status !== 'retired').map((d) => ({ ...d, autoLive: liveAuto.has(`pub-${d.id}`), review: s.reviews[d.id]?.status === 'retired' ? null : s.reviews[d.id] || null })),
     published: clone(s.published),
   }
 }
@@ -1036,7 +1164,6 @@ async function publishDraft(draft) {
   }
   if (!source) throw new ApiError('not_found', 'This draft is no longer in the review queue.')
   const corrections = Object.fromEntries(REVIEW_FIELDS.filter((field) => draft[field] !== undefined).map((field) => [field, draft[field]]))
-  const { preparePublication } = await import('../lib/review.js')
   const listing = preparePublication({ ...source, ...corrections, id: source.id, source: source.source, rawPostId: source.rawPostId }, AREAS, toIso(Date.now()))
   s.published = s.published.filter((p) => p.id !== listing.id)
   s.published.push(listing)

@@ -139,7 +139,7 @@ This supersedes the earlier decision to develop and test Calendar import before 
 
 Show coverage, issuance/context, and unavailable/retry states. Do not show today's weather as the forecast for a future outing or fabricate a forecast beyond the published horizon.
 
-### D16. Preserve uncertainty and require review before publication
+### D16. Preserve uncertainty; publish extracted posts automatically with their gaps shown
 
 **Agreed quality direction and authorised fixes.** Keep ingestion drafts separate from published Discover listings. Reviewers can correct coordinates, addresses, duration, opening hours, event times, recurrence, conditions, and exclusions.
 
@@ -147,7 +147,9 @@ Unknown values remain explicit; an area centroid or invented duration must not m
 
 Preserve source links and retrieval/verification information. Handle source identity and edited posts consistently; retirement/rejection/unpublishing must withdraw the corresponding publication. Resolve extraction years from the post's context rather than hardcoding a calendar year.
 
-The current pilot uses the existing public Telegram/confirmgood ingestion and Gemini extraction. Broader source coverage, a login-only Telegram account, a scheduler, and provider fallbacks are not newly approved commitments. OSM remains a source direction in the older plan, not evidence of a completed live Overpass integration.
+**Amended 2 November 2026 (agreed explicitly):** the server polls the sources every 1–3 hours (default 2) using the public `t.me/s` previews, extracting only new or edited posts. Every extracted deal or event is published automatically unless it has clearly ended (deal validity over, event ended, or an event that ends before it starts). Missing information is shown, not hidden or guessed: listings carry "Dates not stated", "Times not stated" or "Location not stated", and posts OneMap cannot place appear in Cards without a map pin. These appear in Discover marked **Auto-extracted · not reviewed**, are view-only (never auto-scheduled into plans), and are derived from the drafts at read time rather than stored. A reviewer's publish, reject or retirement always overrides the automatic listing.
+
+The current pilot uses the existing public Telegram/confirmgood ingestion and Gemini extraction. Broader source coverage, a login-only Telegram account, and provider fallbacks are not newly approved commitments. OSM remains a source direction in the older plan, not evidence of a completed live Overpass integration.
 
 ### D17. Make evidence and sample data honest
 

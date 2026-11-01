@@ -3,7 +3,7 @@ import { ref, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { listListings, listMyHangouts, addToShortlist, currentUser, session, AREAS, INTERESTS } from '../api/index.js'
 import { useLive } from '../composables/useLive.js'
-import { rankListings } from '../lib/algo/discover.js'
+import { rankListings, capByKind } from '../lib/algo/discover.js'
 import { fmtRange, fmtDateKey, toMs, sgParts, sgTime, DAY, HOUR } from '../lib/time.js'
 import { TYPE_LABEL, TYPE_TONE, interestLabel, areaLabel, sourceLine } from '../lib/labels.js'
 import { toast, toastError } from '../lib/toast.js'
@@ -29,6 +29,10 @@ const area = ref(typeof route.query.area === 'string' ? route.query.area : '')
 const when = ref(typeof route.query.when === 'string' ? route.query.when : typeof route.query.for === 'string' ? `h:${route.query.for}` : 'any')
 const view = ref(route.query.view === 'cards' ? 'cards' : 'map')
 const active = ref(null)
+// Caps: the map draws at most MAP_PIN_LIMIT pins; Cards load CARD_PAGE at a time.
+const MAP_PIN_LIMIT = 30
+const CARD_PAGE = 24
+const visibleCards = ref(CARD_PAGE)
 
 watch(() => route.query, (query) => {
   q.value = typeof query.q === 'string' ? query.q : ''
@@ -39,6 +43,7 @@ watch(() => route.query, (query) => {
   const tags = typeof query.tags === 'string' ? query.tags.split(',').filter((x) => INTERESTS.some((i) => i.slug === x)) : []
   if (tags.join(',') !== picked.value.join(',')) picked.value = tags
 })
+watch([q, type, area, when, picked], () => { visibleCards.value = CARD_PAGE })
 watch([q, type, area, when, view, picked], () => {
   router.replace({ query: { ...route.query, q: q.value || undefined, type: type.value !== 'all' ? type.value : undefined,
     area: area.value || undefined, when: when.value !== 'any' ? when.value : route.query.for ? 'any' : undefined,
@@ -110,8 +115,14 @@ function fmtKeyNow() {
   return `${p.year}-${String(p.month).padStart(2, '0')}-${String(p.day).padStart(2, '0')}`
 }
 
+// Only listings with coordinates can get a pin. The cap keeps a mix of kinds (round-robin, rank order kept).
+const pinnable = computed(() => results.value.filter((r) => Number.isFinite(r.listing.lat) && Number.isFinite(r.listing.lng)))
+const pinned = computed(() => capByKind(pinnable.value, MAP_PIN_LIMIT))
+const pinsCapped = computed(() => pinnable.value.length > MAP_PIN_LIMIT)
+const shownCards = computed(() => results.value.slice(0, visibleCards.value))
+
 const markers = computed(() =>
-  results.value.map((r) => ({
+  pinned.value.map((r) => ({
     id: r.listing.id,
     lat: r.listing.lat,
     lng: r.listing.lng,
@@ -247,23 +258,30 @@ async function confirmAdd() {
         <EmptyState v-if="!results.length" title="Nothing matches" body="Try another area or time, or clear the filters." tone="teal">
           <button type="button" class="btn btn-secondary" @click="clearFilters">Clear filters</button>
         </EmptyState>
-        <ul v-else class="cards">
-          <li v-for="r in results" :id="`card-${r.listing.id}`" :key="r.listing.id" @mouseenter="active = r.listing.id">
-            <ListingCard :listing="r.listing" :km="near ? r.km : null" :available="r.available" :active="active === r.listing.id" @add="onAdd" @open="detail = $event" />
-          </li>
-        </ul>
+        <template v-else>
+          <ul class="cards">
+            <li v-for="r in shownCards" :id="`card-${r.listing.id}`" :key="r.listing.id" @mouseenter="active = r.listing.id">
+              <ListingCard :listing="r.listing" :km="near ? r.km : null" :available="r.available" :active="active === r.listing.id" @add="onAdd" @open="detail = $event" />
+            </li>
+          </ul>
+          <div v-if="results.length > visibleCards" class="show-more">
+            <p class="small muted m-0">Showing {{ shownCards.length }} of {{ results.length }}</p>
+            <button type="button" class="btn btn-secondary" @click="visibleCards += CARD_PAGE">Show more</button>
+          </div>
+        </template>
       </div>
       <div class="map-col" v-show="view === 'map'">
         <div class="map-sticky" data-tour="discover-map">
-          <MapView :markers="markers" scroll-wheel-zoom height="clamp(380px, 65vh, 720px)" @select="selectFromMap" />
+          <MapView :markers="markers" cluster scroll-wheel-zoom height="clamp(380px, 65vh, 720px)" @select="selectFromMap" />
           <div class="legend small">
             <span><i class="dot teal"></i>Place</span><span><i class="dot plum"></i>Event</span><span><i class="dot mustard"></i>Deal</span><span><i class="dot tomato"></i>Open jio</span>
           </div>
+          <p v-if="pinsCapped" class="small muted map-cap">Showing {{ pinned.length }} of {{ pinnable.length }} — filter by area or type to narrow it down</p>
         </div>
       </div>
     </div>
 
-    <p class="small muted mt-4">Sources: OpenJio sample data (curated for this demo), public posts from Singapore Telegram channels (@sgfooddeals, @sgweekend, @sgconcerts, @dateideas, @sgstudentpromos) and confirmgood.com, reviewed before publishing. Map tiles from OneMap, Singapore Land Authority.</p>
+    <p class="small muted mt-4">Sources: OpenJio sample data (curated for this demo). Listings marked Auto-extracted come from public posts on Singapore Telegram channels (@sgfooddeals, @sgweekend, @sgconcerts, @dateideas, @sgstudentpromos) and confirmgood.com, checked automatically for dates and location; reviewed listings are checked by a person. Map tiles from OneMap, Singapore Land Authority.</p>
 
     <AppDialog :open="!!detail" :title="detail?.title || ''" wide @close="detail = null">
       <ListingDetails v-if="detail" :listing="detail" @add="onAdd(detail); detail = null" />
@@ -321,6 +339,8 @@ async function confirmAdd() {
 .map-mode .list-col { display: none; }
 .map-sticky { width: 100%; }
 .legend { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 8px; color: var(--ink-2); }
+.map-cap { margin: 6px 0 0; }
+.show-more { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-top: 16px; }
 .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 5px; }
 .dot.teal { background: var(--teal); } .dot.plum { background: var(--plum); } .dot.mustard { background: var(--mustard); } .dot.tomato { background: var(--tomato); }
 .pick { display: flex; align-items: flex-start; min-height: 44px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 14px; cursor: pointer; background: var(--card); }

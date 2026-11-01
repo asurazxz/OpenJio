@@ -86,3 +86,12 @@ test('routing receives each leg actual departure time after the preceding visit'
   assert.equal(r.ok, true)
   assert.deepEqual(departures, [sat(12), sat(13, 40)])
 })
+
+test('a pool crowded with well-matched restaurants still leaves room for activities', () => {
+  // Live place data adds dozens of restaurants; they must not squeeze out every activity.
+  const restaurants = Array.from({ length: 40 }, (_, i) => ({ id: `food-${String(i).padStart(2, '0')}`, type: 'place', kind: 'meal', interests: ['food'], durationMins: 60, openingHours: allDay, ...at(0.001 * (i % 5), 0.001) }))
+  const activities = L.filter((l) => l.kind !== 'meal')
+  const r = generateItinerary({ ...base, candidates: [...restaurants, ...activities], members: [{ id: 'a', interests: { food: 1 } }] })
+  assert.equal(r.ok, true)
+  assert.ok(r.stops.some((s) => s.listing.kind !== 'meal'))
+})

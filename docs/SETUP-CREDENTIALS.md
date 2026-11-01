@@ -38,6 +38,8 @@ The Free plan currently includes **3,000 credits per day**. OpenJio limits usage
 - Counters and normalized results live in `server/.cache/`. Retain that directory across restarts. It contains no API keys or raw provider responses. Do not delete the daily counter to bypass the limit.
 - Run **one active server process per data directory**. This file counter is not a distributed quota system. Separate deployments and other apps/keys on the same Geoapify account share its free allowance, so their combined usage must stay within it. A dedicated project/key makes OpenJio usage easier to track but does not create a separate account allowance.
 
+The same key also builds Discover's live **places catalogue**: OpenStreetMap cafés, restaurants, hawker centres, museums, parks, attractions and activity venues near each start area, kept only when they list opening hours (top 5 per category per area, about 170 places). It refreshes weekly and uses about 100 calls of the same daily allowance; `http://localhost:8787/api/places/catalogue/status` shows its state, and it is cached in `server/.cache/places-catalogue.json`.
+
 Geoapify and OpenStreetMap attribution is included in the place picker. Preserve it when changing the UI. Some cafés may be missing and opening hours may be absent or outdated; the host can enter checked hours for the outing day. [Place-details documentation](https://apidocs.geoapify.com/docs/place-details/).
 
 ## 3. Gemini API key (listing extraction)
@@ -70,3 +72,21 @@ Use a dedicated Telegram account, not your personal one. Automated logins can ge
    pipeline/.venv/bin/python pipeline/telegram_login.py
    ```
 5. Paste the printed string into `.env` as `TELEGRAM_SESSION=...`. Treat it like a password: it grants full access to that account.
+
+## 5. Scheduled ingestion (Telegram and confirmgood posts)
+
+The API server can run the content pipeline on a timer and publish complete posts to Discover automatically. It needs the Gemini key (section 3) and, for locating outlets, OneMap (section 1).
+
+1. Create the pipeline environment once:
+   ```bash
+   python -m venv pipeline/.venv
+   ```
+   then install `pipeline/requirements.txt` with that environment's pip (`pipeline/.venv/Scripts/pip` on Windows, `pipeline/.venv/bin/pip` elsewhere). The server uses this venv automatically; set `PIPELINE_PYTHON` only to point somewhere else.
+2. In `.env`:
+   ```
+   INGEST_ENABLED=true
+   INGEST_INTERVAL_HOURS=2
+   ```
+3. Restart the server. The first run starts a minute after start-up; `http://localhost:8787/api/ingest/status` shows progress and the last log lines. `POST /api/ingest/run` starts a run immediately.
+
+Only new or edited posts are sent to Gemini. A first run of about 90 posts takes roughly 7 minutes; later runs are short. Complete posts appear in Discover marked "Auto-extracted · not reviewed"; the rest wait in Review with the reason they were held back.

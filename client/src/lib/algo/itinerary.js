@@ -89,9 +89,14 @@ export function buildPool(candidates, ctx) {
   let scored = pick(options.radiusKm)
   if (scored.length < 12) scored = pick(options.radiusKm * 2)
   scored.sort((a, b) => b.pre - a.pre || a.c.id.localeCompare(b.c.id))
-  const meals = scored.filter((x) => x.c.kind === 'meal').slice(0, 10)
-  const rest = scored.filter((x) => !meals.includes(x)).slice(0, options.poolSize - meals.length)
-  return [...meals, ...rest].map((x) => x.c)
+  // Meals are capped and the remaining slots go to activities first: meals cannot run
+  // back to back, so a pool crowded with restaurants (common with live places) has no
+  // chain that fits. Extra meals only fill slots activities leave empty.
+  const allMeals = scored.filter((x) => x.c.kind === 'meal')
+  const meals = allMeals.slice(0, 10)
+  const activities = scored.filter((x) => x.c.kind !== 'meal').slice(0, options.poolSize - meals.length)
+  const spare = allMeals.slice(10, 10 + options.poolSize - meals.length - activities.length)
+  return [...meals, ...activities, ...spare].map((x) => x.c)
 }
 
 /** Try appending a listing to a partial plan. Returns the new stop or null. */

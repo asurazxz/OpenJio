@@ -46,13 +46,15 @@ function timestamp(value) {
   return value
 }
 
-export function preparePublication(draft, areas, verifiedAt = new Date().toISOString()) {
-  const area = areas.find((item) => item.slug === draft.area)
+// allowUnlocated (automatic listings only): a draft whose place could not be found may have no area.
+// Without an area there is never a location, so lat/lng/address are dropped rather than guessed.
+export function preparePublication(draft, areas, verifiedAt = new Date().toISOString(), { allowUnlocated = false } = {}) {
+  const area = areas.find((item) => item.slug === draft.area) || null
   const title = text(draft.title)
-  if (!title || !area) fail('A title and area are required.')
+  if (!title || (!area && !allowUnlocated)) fail('A title and area are required.')
   if (!['deal', 'event'].includes(draft.type)) fail('Choose deal or event.')
-  const lat = number(draft.lat, 'latitude coordinate', -90, 90)
-  const lng = number(draft.lng, 'longitude coordinate', -180, 180)
+  const lat = area ? number(draft.lat, 'latitude coordinate', -90, 90) : null
+  const lng = area ? number(draft.lng, 'longitude coordinate', -180, 180) : null
   const durationMins = number(draft.durationMins, 'duration in whole minutes', 1, 1440, true)
   const openingHours = hours(draft.openingHours)
   const conditions = restrictions(draft.conditions, 'conditions')
@@ -67,7 +69,7 @@ export function preparePublication(draft, areas, verifiedAt = new Date().toISOSt
   const startsAt = timestamp(draft.startsAt)
   const endsAt = timestamp(draft.endsAt)
   if (startsAt && endsAt && Date.parse(endsAt) <= Date.parse(startsAt)) fail('Event end time must follow its start time.')
-  const fields = { lat, lng, durationMins, address: text(draft.address), category: text(draft.category), conditions, exclusions }
+  const fields = { lat, lng, durationMins, address: area ? text(draft.address) : null, category: text(draft.category), conditions, exclusions }
   if (draft.type === 'deal') Object.assign(fields, { openingHours, 'validity.dateFrom': validity.dateFrom, 'validity.dateTo': validity.dateTo, 'validity.daysOfWeek': validity.daysOfWeek, 'validity.timeWindows': validity.timeWindows })
   else Object.assign(fields, { startsAt, endsAt })
   const routeUnknown = Object.entries(fields).filter(([, value]) => value == null).map(([field]) => field)
@@ -76,7 +78,7 @@ export function preparePublication(draft, areas, verifiedAt = new Date().toISOSt
   if (routeReady && routeUnknown.length) fail(`Route-ready listings require known ${routeUnknown.join(', ')}. Fill them from a verified source or publish for manual viewing only.`)
   return {
     id: `pub-${draft.id}`, type: draft.type, kind: draft.kind || (draft.type === 'deal' ? 'meal' : 'activity'), title,
-    summary: text(draft.summary) || '', interests: fields.category ? [fields.category] : [], area: area.slug,
+    summary: text(draft.summary) || '', interests: fields.category ? [fields.category] : [], area: area?.slug ?? null,
     address: fields.address, lat, lng, durationMins, priceLevel: 1, priceText: text(draft.priceText) || 'Price not stated', openingHours,
     startsAt: draft.type === 'event' ? startsAt : null, endsAt: draft.type === 'event' ? endsAt : null,
     merchant: text(draft.merchant), outlets: draft.type === 'deal' ? [{ name: text(draft.merchant) || title, address: fields.address, lat, lng }] : null,

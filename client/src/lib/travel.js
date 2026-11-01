@@ -92,3 +92,12 @@ export async function fetchDrafts() {
   // The pipeline stores drafts keyed by id; accept either shape.
   return Array.isArray(data) ? data : Object.values(data || {})
 }
+
+/** Live place listings (OpenStreetMap via the server). Throws when the server cannot answer. */
+export async function fetchPlaces() {
+  const res = await fetch(`${API}/api/places/catalogue`, { signal: AbortSignal.timeout(4000) })
+  if (!res.ok) throw new Error('places_unavailable')
+  const data = await res.json()
+  if (!Array.isArray(data)) throw new Error('places_unavailable')
+  return data
+}

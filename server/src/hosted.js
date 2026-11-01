@@ -14,7 +14,7 @@ const OPERATIONS = new Set([
 ]);
 export function domainError(code, message) { return Object.assign(new Error(message), { code }); }
 
-export function createHostedService({ repository, verifyToken, readDrafts, catalogue, travel }) {
+export function createHostedService({ repository, verifyToken, readDrafts, catalogue, travel, fetchPlaces }) {
   return {
     async execute({ token, operation, args = [] }) {
       if (!OPERATIONS.has(operation)) throw domainError('invalid', 'Unknown app operation.');
@@ -33,7 +33,7 @@ export function createHostedService({ repository, verifyToken, readDrafts, catal
           uid: () => randomUUID(), token: () => randomBytes(24).toString('hex'),
           getSessionUserId: () => identity?.id || null, setSessionUserId: () => {},
           resetDemo: () => { throw domainError('forbidden', 'Demo reset is unavailable.'); },
-          ...runtime, fetchDrafts: readDrafts,
+          ...runtime, fetchDrafts: readDrafts, fetchPlaces,
           catalogue: snapshot.catalogue ?? catalogue ?? [], latency: 0,
         });
         let result;
