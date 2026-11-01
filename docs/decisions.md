@@ -307,3 +307,48 @@ When a decision changes, update its entry and the superseded table. Keep unresol
 Custom places belong to their itinerary and never become public Discover listings. The host supplies visit duration and can enter checked opening hours for the outing day. Source opening-hours text alone does not count as verified planner hours. Missing provider data or an exhausted quota leaves manual entry and OneMap address lookup available. Show Geoapify and OpenStreetMap attribution.
 
 **Agreed explicitly.** Reorder stop cards with visible drag handles and clear instructions. Support pointer/touch, edge scrolling, keyboard operation and a position selector. Remove Earlier/Later buttons. Retiming, voting reset, permission and final-plan reopening rules still apply. Regenerate retains its replacement behaviour.
+
+
+## 12. Planning, hangout page and Discover refinements (31 October to 2 November 2026)
+
+All agreed explicitly unless marked as an implementation choice.
+
+### D30. Adjust time without a separate preview step
+
+Start and end times use 12-hour selects in 30-minute steps (24:00 shows as "12:00 am (midnight)"). Attendance is checked automatically about 300 ms after any change, so **Lock this time** enables as soon as the chosen interval is valid for the required members. The current timing cards on the Time tab stay as they are; a redesign around a single "best time" card was mocked up and declined.
+
+### D31. Drag only the stop card; keep positions fixed
+
+While reordering, only the rounded stop card follows the cursor or finger; the numbered markers and travel legs stay put as fixed slots, other cards slide to open the gap, and the new order appears in place without a swap animation. The per-card "Move to position" menu was removed; keyboard reordering on the grip (Space, arrows, Enter, Escape) remains the accessible alternative.
+
+### D32. Manual stops are located from their address
+
+Coordinates are optional when adding a stop manually. On **Check fit** or **Add to route**, the app looks the place up with OneMap (full address, then postal code, then name) and offers coordinates only under "Advanced". "Find a place" needs the API server; its error says so.
+
+### D33. One stepped tab bar on the hangout page
+
+The separate phase pills (Find a time, Shape the plan, Go) were merged into the Time, Plan and On the day tabs: each tab shows a check when its phase is done, a filled number when current, and an outlined number when upcoming. Selection stays independent of phase.
+
+### D34. People as a sticky pill
+
+The People card was replaced by a sticky "N going" pill at the top right (avatars plus a chevron) that opens one popover with members, their roles and reply state, host required/optional controls, and the invite link with Share and "Make a new link". The page content uses the full width.
+
+### D35. Edit and Cancel hangout as equal buttons, with in-app confirmation
+
+The host sees **Edit** and **Cancel hangout** as two equally sized buttons. "Cancel" rather than "Delete" because the hangout is marked cancelled and kept for its members, not deleted. Every browser `confirm()` in the app was replaced by one in-app confirmation dialog (`client/src/lib/confirm.js`, `ConfirmHost.vue`) whose cancel choice has initial focus.
+
+### D36. No nudges; show reply progress
+
+The "Nudge" share-a-message features (Time tab and On the day) were removed. The Time tab keeps a reply strip showing who has replied ("3 of 4 replied"). Before confirmation, On the day previews what unlocks there; the host is sent to choose a time or to review and confirm.
+
+### D37. Landing page shows the whole flow
+
+Below the map hero, "How a jio comes together" shows three looping, clearly labelled example animations (find a time, shape the plan, on the day), with scroll reveals, a smooth "See how it works" link and a closing call to action. Reduced motion shows finished states. The headline keeps each quoted phrase on one line on desktop.
+
+### D38. Live places from OpenStreetMap, curated before display
+
+Discover's places come from OpenStreetMap via the Geoapify Places API (the public Overpass servers were unreliable and discourage automated use). The server keeps only named places with parseable opening hours within 1.5 km of each start area, excludes generic chains except attractions, ranks by quality signals (website, Wikipedia/Wikidata, completeness, distance) and keeps the top 5 per category per area (about 170 places). It refreshes weekly, retains places for 30 days after they were last seen, and shares the Geoapify daily cap. These places are route-ready, so the planner can use them; visit lengths are labelled defaults. Discover shows a ranked, capped selection: deals, events and open jios get a small boost, the map shows at most 30 pins spread across categories with marker clustering, and Cards page 24 at a time.
+
+### D39. Candidate pools keep activities
+
+Implementation fix (2 November): itinerary candidate pools cap meals at 10 and fill the remaining slots with activities first, because meals cannot run back to back and restaurant-heavy live data otherwise left no feasible chain.

@@ -1,120 +1,89 @@
 # Project status
 
-Last updated: 30 Oct 2026 (backend hardening; flexible planning, Geoapify and credential checks; older baseline entries retain their earlier verification dates). Branch: `revamp/ideate`.
+Last updated: 2 Nov 2026. Branch: `revamp/ideate` (pushed to origin). Latest feature commit: `624d46f`.
 
-This is the single place to check where OpenJio stands: what works, how it was checked, what is missing, and what to do next. Scope and decisions live in [IDEATION-PLAN.md](./IDEATION-PLAN.md); visual design in [DESIGN.md](./DESIGN.md); algorithm results in [EVALUATION.md](./EVALUATION.md); credentials in [SETUP-CREDENTIALS.md](./SETUP-CREDENTIALS.md).
+This is the single place to check where OpenJio stands: what works, how it was checked, what is missing, and what to do next. Agreed decisions live in [decisions.md](./decisions.md) (they take precedence over older documents); original scope in [IDEATION-PLAN.md](./IDEATION-PLAN.md); visual design in [DESIGN.md](./DESIGN.md); algorithm results in [EVALUATION.md](./EVALUATION.md); credentials in [SETUP-CREDENTIALS.md](./SETUP-CREDENTIALS.md).
 
 ## 1. Summary
 
 | | |
 |---|---|
-| Stage | First build of all six areas (R1 to R6), running in **demo mode** |
-| Runs locally | Yes: `pnpm --dir client dev`, optional `pnpm --dir server dev` |
-| Hosted backend | Not yet. Migrations applied only to a temporary local Postgres; no hosted Supabase project is connected |
+| Stage | All six areas (R1 to R6) built and refined; running in **demo mode** with live external data |
+| Runs locally | Yes: `pnpm --dir client dev` and `pnpm --dir server dev` (the server supplies live data) |
+| Hosted backend | Adapter, trusted server engine and four migrations written; exercised against a temporary local Postgres only. No hosted Supabase project is connected |
 | Deployed app | No |
-| Committed | Yes, on `revamp/ideate`, pushed to origin |
-| Deadline | Unknown (open question 2 in the plan) |
+| Deadline | Final submission Week 12 Friday 9 am (course briefing); exact date to be confirmed by the team |
 
-**Demo mode** means all app data lives in the browser (localStorage), seeded with sample people, hangouts and listings. Each tab can sign in as a different demo person, and tabs stay in sync, so multi-person flows can be shown on one machine. The data API (`client/src/api/index.js`) is async and enforces membership and host permissions, so a Supabase adapter can replace it without changing the screens.
+**Demo mode** keeps user data (people, hangouts, votes, availability) in the browser (localStorage), seeded with sample people and hangouts; each tab can sign in as a different demo person and tabs stay in sync. Discover content is live when the API server runs: OpenStreetMap places and auto-extracted Telegram/confirmgood listings, alongside the sample listings. Hosted mode (`VITE_DATA_MODE=supabase`) runs the same domain engine inside Express against Supabase.
 
 ## 2. Feature status
 
 | Area | Status | What works | Gaps |
 |---|---|---|---|
-| R1 Discover | Built | Ranked feed (interest, distance, fits-your-time, freshness, diversity pass); filters by type, interest, area, time or a hangout's slot; list and map; detail dialog with hours, deal validity, conditions and source; add to a hangout's shortlist | Scraped listings published from review have no opening hours, so they are never auto-scheduled |
-| R2 Hangouts, voting, open jios | Built | Create group, solo or open jio; invite links with safe preview; join, leave, required members; stages collecting, voting, final, ended, cancelled; votes tied to stop versions; host swap, reorder, remove, add; confirm with validation; edits after confirming reopen voting with a banner; open jios with capacity | No editing of title, dates or area after creation; no guest (signed-out) joining by design |
-| R3 Availability | Built | Paintable 30-minute grid (mouse drag, tap, keyboard, per-day quick fill); slot ranking with required members, unknown non-responders, conservative rounding, deterministic ties; aggregate heatmap; editable recommendations with attendance preview; large overlap comparison dialog | Manual grid only; Google Calendar excluded from submission scope |
-| R4 Itinerary builder | Built | Beam search with hard checks (hours, event times, deal validity, travel, slot end, meal windows, no back-to-back meals); greedy baseline; plain-language reasons; per-stop alternatives that keep the plan feasible; manual build with fit check, private custom places and drag-to-reorder; diagnosis and one-click relaxations when nothing fits | Travel is estimated unless OneMap credentials are set; stops can sit up to about 6 km from the start area |
-| R5 Outing companion | Built | Final timeline and map; late-join suggestion using travel time and minimum overlap, with clear no-match reasons; NEA two-hour forecast near the start area | Weather is the current forecast, not the outing date's; host timing updates deferred |
-| R6 Content pipeline | Built | Fetches confirmgood.com JSON and five Telegram channel previews; regex pre-parse plus Gemini extraction; dedupe by composite source id; drafts kept separate from published; reviewer queue with edit, publish, reject and unpublish | Hand-labelled accuracy set is empty, so extraction accuracy is not measured; Telethon untested |
-| Visual design (Hawker Glow) | Built | Tokens, Nunito and DM Sans, light and dark, brand motifs (wordmark, washi headings, Keep/Swap stamps, Jio Slip, route legs), stepped create flow, phone day-list availability with modes and Undo, ranked time cards, swap sheet with timing preview, late-join card. Details and departures in [DESIGN.md section 13](./DESIGN.md#13-as-built-29-oct-2026) | Reviewer three-pane layout and map marker clustering not done; no real photos |
-| How it works page | Built | Explains the rules and weights; runs the beam vs greedy and ranked vs earliest-slot comparison live in the browser | Weights were tuned on the same eight cases |
+| R1 Discover | Built, live data | Map-first view with marker clustering (max 30 pins, spread across categories) and Cards (24 at a time, Show more); search, area, time and type filters with interest filters behind **Filters**; ranking by interest, distance, time fit and freshness with a small boost for deals, events and open jios; pin hover preview and detail dialog; live OpenStreetMap places (about 170, via Geoapify, weekly refresh) that the planner can use; auto-extracted deals and events labelled "Auto-extracted · not reviewed" with source links and explicit gaps ("Dates not stated", "Location not stated") | Sample listings still shown alongside live data; auto-extracted listings are view-only (cannot be added to plans) |
+| R2 Hangouts, voting, open jios | Built | Create group, solo or open jio; invite links with safe preview; join, leave; required members; stage machine; versioned Keep/Swap votes; host edit, cancel (in-app confirmation), reorder, swap, remove, add; confirm with validation; edits after confirming reopen voting; open jios with capacity; sticky "N going" pill opens members and invite link | Guests (signed-out joining) excluded by design |
+| R3 Availability | Built | Paintable 30-minute grid with presets, Undo and keyboard; reply strip ("3 of 4 replied"); ranked slots with required members and unknown non-responders; **Adjust time** with 12-hour selects and automatic attendance check; large overlap comparison dialog | Manual grid only (Google Calendar excluded, D14) |
+| R4 Itinerary builder | Built | Beam search with hard checks (hours, event times, deal validity, travel, slot end, meals) and greedy baseline; works from live places alone; per-stop alternatives; manual build with drag-to-reorder (card follows the cursor; numbers stay fixed); custom stops via place search or a typed address (located automatically with OneMap); warning chips; floating Add a stop / Regenerate toolbar | Generation fails ("No plan fits yet") when live OneMap travel times push the last stop past the slot; the fix (re-run search with live times) is proposed, not built |
+| R5 Outing companion | Built | Final timeline and map; late-join suggestion; NEA forecast chosen by outing time (2-hour, 24-hour or 4-day outlook); before confirmation the tab previews what unlocks | NEA only publishes about 4 days ahead, so the demo outings (6 to 15 Nov) show "no published forecast yet" |
+| R6 Content pipeline | Built, scheduled | Telegram previews and confirmgood.com, Gemini extraction, composite source ids; server runs it every 2 hours (`INGEST_ENABLED`), geocodes outlets, and auto-publishes every deal or event that has not ended; Review page shows live/held status and lets a reviewer correct, publish, reject or unpublish | Hand-labelled accuracy set empty, so extraction accuracy is unmeasured; Telethon untested |
+| Landing and navigation | Built | Public landing with map story, "How a jio comes together" animated demos, scroll reveals, "See how it works"; one signed-out header (Discover, Open jios, How it works, Sign in) on every public page; merged stepped tabs (Time, Plan, On the day) on the hangout page | — |
+| Visual design (Hawker Glow) | Built | Tokens, light and dark, brand motifs, in-app confirmation dialog replacing every browser pop-up | Real photos not used (no licensed images) |
 
 ## 3. Integrations
 
 | Integration | Code | Status | Notes |
 |---|---|---|---|
-| OneMap tiles | `client/src/components/MapView.vue` | Working | No key needed; warm tint, dark-mode variant |
-| OneMap search and routing | `server/src/onemap.js` | Untested live | Needs `ONEMAP_EMAIL` and `ONEMAP_PASSWORD`. Without them the server returns 503 and the app uses labelled estimates |
-| NEA forecast (data.gov.sg) | `client/src/lib/weather.js` | Working | Public, no key |
-| Gemini extraction | `pipeline/extract.py` | Working | Key is set in `.env`. Model `gemini-3.5-flash-lite` (the older default was retired). Calls are paced and retried on 429 |
-| Telegram previews (`t.me/s`) | `pipeline/sources.py` | Working | Occasional read timeouts on @dateideas, reported and skipped |
-| Telethon | `pipeline/sources.py`, `pipeline/telegram_login.py` | Untested | Needs a dedicated account and session string |
-| Geoapify Free | `server/src/places.js`, `client/src/components/CustomPlaceForm.vue` | Live search/details and cache verified | Peranakan Museum returned; Nirvana Dessert Cafe did not. Cached Singapore lookup and manual fallback; setup in SETUP-CREDENTIALS.md |
-| Google Calendar | Removed from submission scope (30 Oct 2026) | Not required | Availability uses the manual grid |
-| Supabase | `supabase/migrations/` | Applied locally, not hosted | Four migrations: schema with RLS on every table, the trusted snapshot/commit RPCs, itinerary-scoped custom places, and profile privacy. The first three were exercised in a temporary local Postgres; the profile privacy migration has not been run yet |
-
-Credential presence checked on 30 Oct 2026: OneMap email/password, Gemini API key and Geoapify API key are set in the local `.env`. Geoapify search/details and cache reuse were verified live; this is not a new live OneMap or Gemini verification.
+| OneMap tiles | `client/src/components/MapView.vue` | Working | No key needed |
+| OneMap search and routing | `server/src/onemap.js` | Working | `ONEMAP_EMAIL`/`ONEMAP_PASSWORD`; token refreshed server-side, one retry on 401; route cache keyed by departure minute, 5,000 entries, 30-day expiry |
+| Geoapify (OpenStreetMap data) | `server/src/places.js`, `server/src/places-catalogue.js` | Working | Places catalogue (167 places on 2 Nov) and host place search; shared 1,000 calls/day ledger; catalogue refresh uses about 100 calls |
+| NEA forecasts (data.gov.sg) | `client/src/lib/weather.js` | Working | Public, no key; horizon about 4 days |
+| Gemini extraction | `pipeline/extract.py` | Working | `gemini-3.5-flash-lite`; paced about 4.5 s per call; only new or edited posts are extracted |
+| Telegram previews (`t.me/s`) | `pipeline/sources.py` | Working | Five channels, 15 posts each per run |
+| Telethon | `pipeline/sources.py` | Untested | Needs a dedicated account |
+| Supabase | `supabase/migrations/`, `client/src/api/hosted*.js`, `server/src/hosted.js`, `server/src/supabase.js` | Written, local Postgres only | Four migrations (schema and RLS, trusted snapshot/commit RPCs, custom places, profile privacy). The profile-privacy migration has not been executed anywhere yet |
+| Google Calendar | — | Removed (D14) | |
 
 ## 4. Verification
 
-### Flexible planning checkpoint — 30 Oct 2026
+Latest full run (2 Nov 2026, before commit `624d46f`): server **79 passed, 1 optional Docker SQL test skipped**; client unit **115 passed**; Playwright **94 browser tests** across desktop (1280 px) and mobile (375 px), all passing after the meal-pool fix (the two group-journey failures in the first run were that bug). Production build passes.
 
-- Client suite: **87 passed**. Server suite: **33 passed, 1 optional Docker SQL test skipped**. Production build passed.
-- Browser checks: **32 passed**, across desktop and phone: place search/details, missing-provider and manual fallback, stale place/address responses, persisted private places, drag/keyboard/position reordering, edited slot validation, overlap day selection, original group journey, plan corrections and responsive routes.
-- All three migrations applied to a temporary local Postgres runtime. Custom stops survived independent hosted requests and reordering; public Discover isolation and service-role-only RPC grants passed. No hosted database was changed.
-- Live Geoapify returned Peranakan Museum with website and reported hours. A repeated search/details lookup left the provider-call counter unchanged. Nirvana Dessert Cafe was not returned, so manual entry is required for that example.
-- Desktop and phone overlap layouts checked visually, with no horizontal overflow.
+Live checks the same day: an ingest run fetched 90 posts, produced 72 drafts and published 60 (26 with a map pin, 34 in Cards only; 12 ended posts withheld); the places catalogue built 167 places across 14 areas; plans generated from live places alone (no sample data) around Bugis, Tiong Bahru and Chinatown.
 
-### Backend hardening — 30 Oct 2026
+Earlier evidence (hosted migrations against local Postgres, Geoapify search caching, accessibility contrast checks) is recorded in the git history of this file and in [decisions.md](./decisions.md).
 
-- In shared mode, `/api/route` and `/api/geocode` require a signed-in caller. All provider endpoints are rate limited per client. Set `TRUST_PROXY` when running behind a hosting proxy so limits apply per visitor.
-- The route cache is keyed by departure minute (matching the client), holds at most 5,000 entries and drops entries older than 30 days. A OneMap 401 is retried once with a fresh token.
-- Publishing loads the pipeline's own draft by id. Reviewer corrections apply only to the editable fields; source, raw post and id come from the pipeline. The server now passes drafts to the engine as a list, which hosted review needed.
-- Viewing an ended or cancelled plan no longer rewrites its timings.
-- Custom start areas must be labelled Singapore coordinates. Hangout interests and profile home areas must be known values.
-- New migration `20261030120000_profile_privacy.sql`: a person reads only their own profile and those of people they share a hangout with.
-- The pipeline marks re-extracted posts with `sourceEditedAt`. A published or rejected review that predates the edit is withdrawn and the draft returns to the review queue.
-- Checks: client 93 passed; server 38 passed and 1 optional Docker SQL test skipped; pipeline 9 passed; production build passed. The SQL test now covers profile visibility, but Docker was not running, so neither it nor the new migration was executed.
-
-The earlier baseline checks below are retained for context.
-
-| Check | Result | How to run |
-|---|---|---|
-| Algorithm unit tests | 24 of 24 pass | `pnpm --dir client test` |
-| Server unit tests | 13 of 13 pass | `pnpm --dir server test` |
-| Production build | Passes | `pnpm --dir client build` |
-| End-to-end (Playwright) | 16 of 16 pass (8 desktop 1280 px, 8 mobile 375 px): group journey, invite and join across two tabs, open jio join and vote, privacy and evaluation page, overflow and console errors on every main route | `pnpm --dir client e2e` |
-| Algorithm evaluation | Beam matches or beats greedy on score in all 6 feasible cases; never breaks a hard rule; greedy keeps the least happy member happier in 1 | `pnpm --dir client evaluate` |
-| Pipeline live run | 88 posts fetched, 88 extracted by Gemini, 73 drafts written | `pipeline/.venv/bin/python pipeline/run.py --limit 15` |
-| Manual browser check | Group journey (lock slot, generate, swap, confirm, late join), open jio join and vote, solo plan, review and publish, Discover, How it works; after the redesign: create flow and slip, availability drag, Undo and keyboard, swap preview | Desktop and 375 px, light and dark |
-| Contrast | All text token pairs at least 4.5:1 in both themes; control borders at least 3:1 | Node script over the token values, see DESIGN.md section 13 |
-| Horizontal overflow at 375 px | None on any route after fixes | Checked by script in the browser |
+How to run: `pnpm --dir client test`, `pnpm --dir client e2e`, `pnpm --dir server test`, `pnpm --dir client build`. The e2e suite reuses a dev server on port 5173 if one is running.
 
 ## 5. Known issues and limits
 
-1. **Demo mode only.** Sign-in is choosing a demo person. Data is per browser and resets with "Reset demo data".
-2. **Sample data is approximate.** Real venues with hours, addresses and coordinates written from memory; events and deals are made up and labelled "Sample data". Spot-check before a demo relies on a specific venue.
-3. **Sample dates age.** Seeded hangouts are in November 2026 and sample events run to mid December 2026. After that, events drop out of Discover and plans.
-4. **Travel times are estimates** (distance with a detour factor) until OneMap credentials are added. They are labelled as estimates in the UI.
-5. **Weights are tuned on the evaluation cases**, so the comparison favours the beam search more than an independent test set would.
-6. **The alternatives dialog** takes about a second, because each option re-times the whole plan.
-7. **Published scraped listings** have no opening hours, so they only enter plans by hand and show an "hours unknown" warning, which does not block confirming.
-8. **Hosted rollout remains pending.** The schema and new custom-stop migration were applied and exercised in local Postgres at the checkpoint above; live Supabase deployment and multi-account validation remain separate work.
-9. **OneMap search token requirement** comes from the recommendation document and has not been checked against the live API.
+1. **Live routing can break generated plans.** When OneMap travel times are longer than estimates, "Make me a plan" reports "No plan fits yet" instead of choosing other stops. Proposed fix: re-run the search with the fetched live times, up to about three passes.
+2. **Demo mode only.** Sign-in is choosing a demo person; user data is per browser. Hosted Supabase is not connected.
+3. **Sample data still mixed in.** Sample places, events and deals remain alongside live data, labelled "Sample data". Their dates are November to mid-December 2026.
+4. **Auto-extracted listings are unreviewed.** Gemini mistakes (wrong dates, wrong outlet) can reach Discover; they are labelled and view-only, and a reviewer can reject them. 34 of 60 have no map location.
+5. **Pipeline output is per machine.** `pipeline/out/` and `server/.cache/` are git-ignored; each teammate builds their own drafts and catalogue (needs their own keys and `pipeline/.venv`).
+6. **Places need opening hours to be listed.** Only about a quarter of OpenStreetMap places have hours, so coverage favours well-maintained venues; visit lengths are defaults by category.
+7. **Weights are tuned on the evaluation cases**, so the beam-versus-greedy comparison is optimistic.
+8. **Weather** cannot show a forecast for outings more than about 4 days away.
 
 ## 6. Next steps
 
 In rough priority order:
 
-1. Confirm live OneMap search and routing with the configured credentials (`/api/health` shows `"onemap": "ok"`).
-2. Label 30 to 50 posts in `pipeline/labels/labels.json` and run `pipeline/evaluate.py` to measure extraction accuracy.
-3. Apply the migration to a local Postgres or a Supabase branch and fix any errors, add the invite-join function, run Supabase advisors, then write a live adapter for `client/src/api/` with real auth.
-4. Settle the open questions in the plan (deadline, ownership, limits) and assign owners in its tracker.
-5. Deploy the client and server.
+1. Fix plan generation under live travel times (known issue 1).
+2. Decide whether to remove or reduce the sample data now that places, events and deals are live.
+3. Label 30 to 50 posts in `pipeline/labels/labels.json` and run `pipeline/evaluate.py` to measure extraction accuracy.
+4. Connect a hosted Supabase project, apply the four migrations, and run a multi-account journey; then deploy client and server.
+5. Write the README disclosures the course requires (parts relying on AI, credentials for graders) and assign owners in the plan tracker.
 
 ## 7. Where things are
 
 | Path | Contents |
 |---|---|
-| `client/src/views/` | Screens: sign in, home, new plan, hangout, join, Discover, profile, review, how it works, not found |
-| `client/src/components/` | Header, bottom nav, availability grid, time/plan/day-of panels, timeline, map, dialogs, cards; `brand/` holds the Hawker Glow motifs |
-| `client/src/styles/` | Design tokens and base styles |
-| `.claude/skills/` | Design skills used for the redesign (frontend-design, impeccable, ui-ux-pro-max, taste-skill, web-design-guidelines, bencium UX designers, Vercel React guides) |
-| `client/src/lib/algo/` | `slots.js`, `itinerary.js`, `validity.js`, `reachability.js`, `discover.js`, `evaluate.js` |
-| `client/src/api/` | Demo store and data API |
-| `client/src/data/` | Sample listings, interests, areas and demo people |
+| `client/src/views/` | Screens: entry/landing, sign in, home, new plan, hangout, join, Discover, profile, review, how it works, not found |
+| `client/src/components/` | Header, bottom nav, availability grid, Time/Plan/On the day panels, timeline, map, dialogs (including `ConfirmHost`), cards; `brand/` motifs; `landing/` animated demos |
+| `client/src/api/` | `engine.js` (all domain rules), demo store, hosted adapter |
+| `client/src/lib/` | `algo/` (slots, itinerary, validity, reachability, discover, evaluate), travel, weather, review, confirm, time |
 | `client/tests/`, `client/e2e/` | Unit tests, Playwright journeys |
-| `server/` | Express API for OneMap and drafts |
+| `server/src/` | Express app, OneMap, Geoapify search, places catalogue, ingest scheduler, hosted service, Supabase repository |
 | `pipeline/` | Ingestion, extraction, evaluation, labels |
-| `supabase/migrations/` | Database schema and RLS |
+| `supabase/migrations/` | Database schema, RLS and trusted RPCs |
+| `.claude/skills/` | Design skills used during the redesign |

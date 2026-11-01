@@ -663,3 +663,14 @@ This section records how the spec landed in `client/` and every place the build 
 - Playwright: 16 of 16 journeys pass at 1280 px and 375 px, with no horizontal overflow or console errors.
 - Manual pass in the browser: create flow, invite slip, availability drag, Undo and keyboard, ranked cards, generate, vote, swap preview, light and dark, 375 px.
 - Reviewed against the Vercel Web Interface Guidelines and the Impeccable craft floor; fixes applied (ellipses on loading text and placeholders, scroll padding under the sticky header and bottom nav, an unsaved-changes guard on availability, `touch-action: manipulation`).
+
+### Updates, 31 October to 2 November 2026
+
+Recorded as decisions D26–D39 in [decisions.md](./decisions.md); the visible changes:
+
+- **Landing:** map-led hero plus "How a jio comes together" with three looping example animations (`client/src/components/landing/`), scroll reveals (`client/src/composables/useReveal.js`) and a closing call to action. Signed-out visitors get one header with Discover, Open jios and How it works.
+- **Hangout page:** phase pills merged into the stepped tabs; People moved to a sticky "N going" pill with a popover; **Edit** and **Cancel hangout** as equal buttons; one in-app confirmation dialog (`ConfirmHost.vue`) replaces every browser pop-up.
+- **Time:** reply strip; 12-hour time selects with automatic attendance checks.
+- **Plan:** dragged card follows the pointer while numbers and legs stay fixed; warning chips; floating Add a stop / Regenerate toolbar.
+- **On the day:** preview of what unlocks before confirmation.
+- **Discover:** marker clustering (Leaflet.markercluster, orange bubbles with a teal halo), a 30-pin cap, Cards paging, "Auto-extracted · not reviewed" and "… not stated" chips, OpenStreetMap source lines.
