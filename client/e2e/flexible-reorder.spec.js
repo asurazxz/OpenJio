@@ -49,7 +49,7 @@ test('host can reorder stops by dragging the grip', async ({ page }) => {
   await waitForOrder(page, [before[1], before[0], ...before.slice(2)])
 })
 
-test('keyboard drop, destination selector, and Escape cancellation work', async ({ page }) => {
+test('keyboard drop, move to the last position, and Escape cancellation work', async ({ page }) => {
   await openEditablePlan(page)
   const original = await titles(page)
   const firstGrip = page.getByRole('button', { name: `Reorder stop 1: ${original[0]}` })
@@ -68,9 +68,14 @@ test('keyboard drop, destination selector, and Escape cancellation work', async 
   await page.keyboard.press('Escape')
   await waitForOrder(page, afterKeyboard)
 
-  const destination = page.getByRole('combobox', { name: /^Move stop 1 to position/ })
-  await expect(destination).toBeEnabled()
-  await destination.selectOption({ value: String(afterKeyboard.length - 1) })
+  const lastGrip = page.getByRole('button', { name: `Reorder stop 1: ${afterKeyboard[0]}` })
+  await expect(lastGrip).toBeEnabled()
+  await lastGrip.focus()
+  await page.keyboard.press('Space')
+  for (let step = 1; step < afterKeyboard.length; step += 1) {
+    await page.keyboard.press('ArrowDown')
+  }
+  await page.keyboard.press('Enter')
   await waitForOrder(page, [...afterKeyboard.slice(1), afterKeyboard[0]])
 })
 

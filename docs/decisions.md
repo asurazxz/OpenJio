@@ -226,11 +226,11 @@ Remove the former steps 9 and 10 inside the creation form. Completing or closing
 
 **Implementation choice:** keep `/` and the `home` route name for compatibility, with `EntryView` selecting the appropriate view. Do not automatically send a visitor away from the landing page before they choose an action.
 
-### D27. Give the landing header its own simpler role
+### D27. Show one public header to signed-out visitors
 
-**Latest agreed refinement.** The landing header contains the OpenJio logo, theme control, and **Sign in**. Remove the partial Discover/How it works navigation from this header rather than add Home and Open jios just to make it resemble the full app navigation.
+**Agreed explicitly, 31 October 2026 (supersedes the earlier minimal landing header).** Every page a signed-out visitor sees, including the landing page, uses the same header: the OpenJio logo, the public pages **Discover**, **Open jios** and **How it works**, the theme control, and **Sign in**. Pages that need an account (Home, Create a jio, Profile) are not linked, so no link leads straight to a sign-in wall. On phones the links stay hidden as in the signed-in header; the landing hero's **Explore the map** and the footer's **How OpenJio works** remain.
 
-Discover remains available through **Explore the map**. **How OpenJio works** remains in the landing footer. Preserve the application navigation elsewhere.
+Signed-in visitors keep the full application navigation.
 
 ### D28. Use a coherent Marina Bay example route
 
@@ -265,7 +265,7 @@ Use the existing geographic sample data and clearly label the example. The drawn
 | Tour explanation fixed at bottom-right | Explanation anchored beside its spotlight. |
 | Tour highlighting without dimming | Dim surrounding content during the active tour. |
 | Ten tour steps, including the creation form | Eight steps; explain where creation starts, then end on Discover. |
-| Landing header with only Discover and How it works | Logo, theme and Sign in; discovery/explanation links stay in the page. |
+| Landing header with only logo, theme and Sign in | One signed-out header on every page: Discover, Open jios, How it works, theme and Sign in. |
 | Backtracking landing example and a single overall reveal | Marina Bay route with sequential checkpoint cards and traced legs. |
 | Only today's short-range weather | Forecast matched to the outing within the published horizon. |
 | Reuse an existing shared database | New standalone hosted Supabase project. |

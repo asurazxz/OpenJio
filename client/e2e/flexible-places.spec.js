@@ -74,6 +74,7 @@ test('provider search error offers manual entry and the custom place can still b
   await dialog.getByRole('button', { name: 'Enter manually', exact: true }).click()
   await dialog.getByLabel('Place name').fill('Manual fallback venue')
   await dialog.getByLabel('Address').fill('22 River Valley Road, Singapore')
+  await dialog.locator('summary', { hasText: 'Advanced: enter coordinates instead' }).click()
   await dialog.getByLabel('Latitude').fill('1.2921')
   await dialog.getByLabel('Longitude').fill('103.8422')
   await dialog.getByLabel('Visit duration (minutes)').fill('60')
@@ -117,6 +118,19 @@ test('stale place search responses do not replace newer results', async ({ page 
   await expect(dialog.getByRole('button', { name: 'New Venue Result' })).toBeVisible()
   releaseOld()
   await expect(dialog.getByRole('button', { name: 'Old Venue Result' })).toHaveCount(0)
+})
+
+test('manual address without coordinates is located automatically when adding the stop', async ({ page }) => {
+  await page.route('**/api/geocode*', route => route.fulfill({ json: [{ name: "ST ANDREW'S CATHEDRAL", address: "11 SAINT ANDREW'S ROAD SAINT ANDREW'S CATHEDRAL SINGAPORE 178959", lat: 1.2923, lng: 103.8522 }] }))
+  const dialog = await openAddStop(page)
+  await dialog.getByRole('button', { name: 'Enter manually', exact: true }).click()
+  await dialog.getByLabel('Place name').fill("St Andrew's Cathedral")
+  await dialog.getByLabel('Address').fill("11 St Andrew's Rd, Singapore 178959")
+  await dialog.getByLabel('Visit duration (minutes)').fill('60')
+  await dialog.getByRole('button', { name: 'Add to route', exact: true }).click()
+
+  await expect(dialog).toBeHidden()
+  await assertRouteHas(page, "St Andrew's Cathedral")
 })
 
 test('manual address lookup ignores results for an address that has since changed', async ({ page }) => {

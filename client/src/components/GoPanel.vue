@@ -5,6 +5,7 @@ import { useLive } from '../composables/useLive.js'
 import { fmtTime, fmtDuration, fmtRange, fmtDay, sgDateKey, fromDateKey, MIN } from '../lib/time.js'
 import { forecastNear } from '../lib/weather.js'
 import { toast, toastError } from '../lib/toast.js'
+import { confirmDialog } from '../lib/confirm.js'
 import PlanTimeline from './PlanTimeline.vue'
 import MapView from './MapView.vue'
 import EmptyState from './EmptyState.vue'
@@ -119,7 +120,7 @@ const markers = computed(() => (plan.value?.stops || []).map((s, i) => ({ id: i,
 
 async function reopen() {
   if (h.value.stage !== 'final' || !isHost.value) return
-  if (!window.confirm('Reopen voting? Everyone will see the plan as not final until you confirm again.')) return
+  if (!(await confirmDialog({ title: 'Reopen voting?', message: 'Everyone will see the plan as not final until you confirm again.', confirmLabel: 'Reopen voting' }))) return
   try {
     await reopenVoting(h.value.id)
     emit('goto', 'plan')
@@ -127,10 +128,14 @@ async function reopen() {
     toastError(e)
   }
 }
+
 async function end(stage) {
   if (h.value.stage !== 'final' || !isHost.value) return
-  const msg = stage === 'cancelled' ? 'Cancel this hangout for everyone?' : 'Mark this hangout as done?'
-  if (!window.confirm(msg)) return
+  const cancelling = stage === 'cancelled'
+  const ok = await confirmDialog(cancelling
+    ? { title: 'Cancel this hangout?', message: 'Everyone will see it as cancelled.', confirmLabel: 'Cancel hangout', cancelLabel: 'Keep it', danger: true }
+    : { title: 'Mark this hangout as done?', message: 'Everyone will see it as finished.', confirmLabel: 'Mark as done' })
+  if (!ok) return
   try {
     await setStage(h.value.id, stage)
     toast(stage === 'cancelled' ? 'Hangout cancelled' : 'Marked as done')
@@ -142,9 +147,53 @@ async function end(stage) {
 
 <template>
   <div>
-    <EmptyState v-if="h.stage !== 'final' && h.stage !== 'ended'" :title="h.stage === 'cancelled' ? 'Hangout cancelled' : 'Not confirmed yet'" :body="h.stage === 'cancelled' ? 'This outing is closed. Start a new hangout when you are ready.' : 'Once the host confirms the plan, the final timeline and the late-join helper appear here.'" tone="teal">
-      <button v-if="h.stage !== 'cancelled'" type="button" class="btn btn-secondary" @click="emit('goto', 'plan')">See the draft plan</button>
-    </EmptyState>
+    <EmptyState v-if="h.stage === 'cancelled'" title="Hangout cancelled" body="This outing is closed. Start a new hangout when you are ready." tone="teal" />
+
+    <section v-else-if="h.stage !== 'final' && h.stage !== 'ended'" class="unconfirmed" aria-labelledby="unconfirmed-title">
+      <div>
+        <h3 id="unconfirmed-title" class="u-title">Not confirmed yet</h3>
+        <p class="u-lede">Once the host confirms the plan, the final timeline, the late-join helper and the weather for the outing unlock here.</p>
+      </div>
+
+      <div>
+        <p class="u-kicker">Preview: what you'll get on the day</p>
+        <ul class="u-previews">
+          <li class="u-card">
+            <span class="u-ico" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="2.5" /><circle cx="6" cy="18" r="2.5" /><path d="M6 8.5v7M11 6h9M11 12h9M11 18h9" /></svg>
+            </span>
+            <div>
+              <h4 class="u-card-title">Final timeline <span class="u-tag">Preview</span></h4>
+              <p class="u-card-body">Every stop with times and travel.</p>
+            </div>
+          </li>
+          <li class="u-card">
+            <span class="u-ico" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-6-5.2-6-10a6 6 0 0 1 12 0c0 4.8-6 10-6 10Z" /><circle cx="12" cy="11" r="2" /></svg>
+            </span>
+            <div>
+              <h4 class="u-card-title">Join later <span class="u-tag">Preview</span></h4>
+              <p class="u-card-body">Tell us where you're leaving from and we'll find the stop you can still reach.</p>
+            </div>
+          </li>
+          <li class="u-card">
+            <span class="u-ico" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="9" r="3.5" /><path d="M9 2v1.5M2.5 9H4M4.6 4.6l1 1M13.4 4.6l-1 1M7 17h9a3.5 3.5 0 0 0 0-7 5 5 0 0 0-9.6 1.4A2.8 2.8 0 0 0 7 17Z" /></svg>
+            </span>
+            <div>
+              <h4 class="u-card-title">Weather <span class="u-tag">Preview</span></h4>
+              <p class="u-card-body">The forecast near the start area for the outing time.</p>
+            </div>
+          </li>
+        </ul>
+      </div>
+
+      <div class="u-actions">
+        <button v-if="isHost && !h.lockedSlot" type="button" class="btn btn-primary" @click="emit('goto', 'time')">Choose a time first</button>
+        <button v-else-if="isHost" type="button" class="btn btn-primary" @click="emit('goto', 'plan')">Review and confirm the plan</button>
+        <button type="button" class="btn" :class="isHost ? 'btn-ghost' : 'btn-secondary'" @click="emit('goto', 'plan')">See the draft plan</button>
+      </div>
+    </section>
 
     <div v-else-if="planLoading && !plan" class="py-4" role="status">Loading the confirmed plan…</div>
     <div v-else-if="planError" class="notice danger" role="alert"><p>{{ planError.message }}</p><button type="button" class="btn btn-secondary btn-sm" @click="reloadPlan">Retry loading plan</button></div>
@@ -238,4 +287,18 @@ async function end(stage) {
 .r-label { margin: 0; font-weight: 800; font-size: 0.85rem; color: var(--teal-ink); }
 .r-title { font-family: var(--font-display); font-weight: 900; font-size: 1.25rem; margin: 2px 0 6px; }
 .r-meta { color: var(--ink-2); }
+.unconfirmed { display: grid; gap: 20px; padding: 24px 20px; border: 1.5px dashed var(--line-strong); border-radius: var(--radius-lg); background: var(--card); }
+.u-title { margin: 0 0 6px; }
+.u-lede { margin: 0; color: var(--ink-2); max-width: 60ch; }
+.u-kicker { margin: 0 0 10px; font-size: 0.8rem; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-2); }
+.u-previews { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; grid-template-columns: 1fr; }
+@media (min-width: 768px) { .u-previews { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.u-card { display: flex; gap: 12px; align-items: flex-start; padding: 14px; min-width: 0; border: 1.5px dashed var(--line-strong); border-radius: var(--radius); background: var(--paper-2); opacity: 0.8; }
+.u-ico { flex: none; width: 34px; height: 34px; display: grid; place-items: center; border-radius: var(--radius-sm); background: var(--teal-soft); color: var(--teal-ink); }
+.u-card-title { margin: 0 0 4px; font-size: 1rem; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.u-tag { font-size: 0.7rem; font-weight: 800; padding: 1px 8px; border-radius: 999px; border: 1px dashed var(--line-strong); color: var(--ink-2); }
+.u-card-body { margin: 0; font-size: 0.9rem; color: var(--ink-2); overflow-wrap: anywhere; }
+.u-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.u-actions .btn { min-height: 44px; }
+@media (max-width: 480px) { .u-actions .btn { flex: 1 1 100%; } }
 </style>

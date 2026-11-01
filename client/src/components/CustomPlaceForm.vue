@@ -1,5 +1,5 @@
 <script setup>
-import { ref, watch, onBeforeUnmount, computed } from 'vue'
+import { ref, watch, onBeforeUnmount, computed, nextTick } from 'vue'
 import { addCustomStop, previewCustomStop, SOFT_ISSUES } from '../api/index.js'
 import { searchPlaces, placeDetails } from '../lib/places.js'
 import { geocode } from '../lib/travel.js'
@@ -9,7 +9,11 @@ import MapView from './MapView.vue'
 const props = defineProps({ hangoutId: { type: String, required: true }, manual: Boolean, disabled: Boolean })
 const emit = defineEmits(['added'])
 const query = ref(''), results = ref([]), loading = ref(false), error = ref(''), saving = ref(false)
-const form = ref(null), checked = ref(null), checking = ref(false), addresses = ref([]), locating = ref(false)
+const form = ref(null), checked = ref(null), checking = ref(false), addresses = ref([]), locating = ref(false), autoLocating = ref(false)
+const POSTAL_CODE = /\b\d{6}\b/
+const LOCATE_MISS = 'We couldn\'t find that address. Check it, pick a match with “Find address with OneMap”, or enter coordinates under Advanced.'
+const LOCATE_DOWN = 'Address lookup is unavailable right now. Try again shortly, or enter coordinates under Advanced.'
+const lookup = async q => (await geocode(q)) || []
 let timer, controller, sequence = 0, previewSequence = 0, locateSequence = 0
 const blank = () => ({ name: '', address: '', lat: '', lng: '', durationMins: 60, kind: 'activity', opens: '', closes: '', provider: 'manual', providerId: '', website: '', openingHoursText: '' })
 watch(() => props.manual, value => { if (value) form.value = blank(); else form.value = null; error.value = ''; results.value = []; addresses.value = []; locating.value = false; ++locateSequence; controller?.abort(); ++sequence; clearTimeout(timer); loading.value = false }, { immediate: true })
@@ -59,7 +63,32 @@ function selectAddress(address) {
   Object.assign(form.value, { address: address.address, lat: address.lat, lng: address.lng })
   addresses.value = []
 }
+// Fills form.lat/lng from OneMap when they are missing. The user's typed address and name are left unchanged.
+async function ensureCoordinates() {
+  if (usableCoordinates.value) return true
+  const target = form.value, address = target.address.trim(), name = target.name.trim()
+  const postal = address.match(POSTAL_CODE)?.[0]
+  autoLocating.value = true; error.value = ''
+  try {
+    let found = address ? await lookup(address) : []
+    if (!found.length && postal) found = await lookup(postal)
+    if (!found.length && name) found = await lookup(name)
+    // The user edited the form while the lookup ran; leave their new input alone.
+    if (target !== form.value || form.value.address.trim() !== address) return false
+    if (!found.length) { error.value = LOCATE_MISS; return false }
+    const match = (postal && found.find(place => place.address?.includes(postal))) || found[0]
+    form.value.lat = match.lat
+    form.value.lng = match.lng
+    return true
+  } catch {
+    if (target === form.value) error.value = LOCATE_DOWN
+    return false
+  } finally { autoLocating.value = false }
+}
 async function checkFit() {
+  if (!(await ensureCoordinates())) return
+  // Setting lat/lng fires the form watcher (which clears `checked`) on the next tick; let it run before this preview starts.
+  await nextTick()
   const ticket = ++previewSequence
   checking.value = true; checked.value = null; error.value = ''
   try {
@@ -70,9 +99,13 @@ async function checkFit() {
 }
 const blocking = computed(() => checked.value?.issues.filter(i => !SOFT_ISSUES.includes(i.type)) || [])
 async function add() {
-  if (saving.value || props.disabled) return
+  if (saving.value || autoLocating.value || props.disabled) return
   saving.value = true; error.value = ''
-  try { const place = await addCustomStop(props.hangoutId, { ...form.value }); emit('added', place) }
+  try {
+    if (!(await ensureCoordinates())) return
+    const place = await addCustomStop(props.hangoutId, { ...form.value })
+    emit('added', place)
+  }
   catch (e) { error.value = e.message }
   finally { saving.value = false }
 }
@@ -109,11 +142,11 @@ onBeforeUnmount(() => { clearTimeout(timer); controller?.abort(); ++sequence; ++
           <ul v-if="addresses.length" class="place-results">
             <li v-for="address in addresses" :key="`${address.lat},${address.lng}`"><button type="button" class="place-result" @click="selectAddress(address)">{{ address.address }}</button></li>
           </ul>
-          <details :open="!usableCoordinates">
-            <summary class="small">Enter coordinates manually</summary>
+          <details>
+            <summary class="small">Advanced: enter coordinates instead</summary>
             <div class="row g-2 mt-1">
-              <label class="col-6 field">Latitude<input v-model="form.lat" type="number" step="any" min="1.13" max="1.48" class="form-control" required /></label>
-              <label class="col-6 field">Longitude<input v-model="form.lng" type="number" step="any" min="103.58" max="104.1" class="form-control" required /></label>
+              <label class="col-6 field">Latitude<input v-model="form.lat" type="number" step="any" min="1.13" max="1.48" class="form-control" /></label>
+              <label class="col-6 field">Longitude<input v-model="form.lng" type="number" step="any" min="103.58" max="104.1" class="form-control" /></label>
             </div>
           </details>
         </template>
@@ -138,8 +171,8 @@ onBeforeUnmount(() => { clearTimeout(timer); controller?.abort(); ++sequence; ++
         <p v-for="(issue, i) in checked.issues" :key="i" :class="{ 'text-danger': !SOFT_ISSUES.includes(issue.type) }">{{ issue.message }}</p>
       </div>
       <div class="d-flex gap-2 mt-3">
-        <button type="button" class="btn btn-secondary" :disabled="checking || saving || disabled" @click="checkFit">{{ checking ? 'Checking…' : 'Check fit' }}</button>
-        <button type="submit" class="btn btn-primary" :disabled="saving || disabled || !usableCoordinates">{{ saving ? 'Adding…' : 'Add to route' }}</button>
+        <button type="button" class="btn btn-secondary" :disabled="checking || saving || disabled || autoLocating" @click="checkFit">{{ checking ? 'Checking…' : autoLocating ? 'Locating address…' : 'Check fit' }}</button>
+        <button type="submit" class="btn btn-primary" :disabled="saving || disabled || autoLocating || !form.name.trim() || !form.address.trim()">{{ saving ? 'Adding…' : autoLocating ? 'Locating address…' : 'Add to route' }}</button>
       </div>
       <p class="small muted mt-2 mb-0">Added to this outing only. It will not appear in Discover.</p>
     </form>

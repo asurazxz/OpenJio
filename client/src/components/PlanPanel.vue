@@ -5,6 +5,7 @@ import { useLive } from '../composables/useLive.js'
 import { fmtRange, fmtTime } from '../lib/time.js'
 import { TYPE_LABEL, TYPE_TONE, areaLabel } from '../lib/labels.js'
 import { toast, toastError } from '../lib/toast.js'
+import { confirmDialog } from '../lib/confirm.js'
 import PlanTimeline from './PlanTimeline.vue'
 import MapView from './MapView.vue'
 import AppDialog from './AppDialog.vue'
@@ -32,10 +33,12 @@ const active = ref(-1)
 
 const ids = computed(() => (plan.value?.stops || []).map((s) => s.listingId))
 const blocking = computed(() => (plan.value?.issues || []).filter((i) => !SOFT_ISSUES.includes(i.type)))
+const planIssues = computed(() => (plan.value?.issues || []).filter((i) => i.index === -1))
+const isSoft = (i) => SOFT_ISSUES.includes(i.type)
 const voters = computed(() => props.detail.members.length)
 
 async function generate(relax = null) {
-  if (plan.value?.stops.length && !relax && !window.confirm('Replace the current plan with a new one? Votes on changed stops will reset.')) return
+  if (plan.value?.stops.length && !relax && !(await confirmDialog({ title: 'Replace the current plan?', message: 'Votes on changed stops will reset.', confirmLabel: 'Replace plan', danger: true }))) return
   busy.value = true
   problems.value = null
   try {
@@ -294,12 +297,19 @@ const voteSummary = computed(() => {
       </div>
 
       <div class="row g-4">
-        <div class="col-lg-7">
+        <div class="col-lg-7 plan-col" :class="{ 'has-bar': canEdit }">
           <div class="plan-head">
             <WashiHeading tag="h3" tone="orange" class="m-0">The plan</WashiHeading>
             <span class="phase tnum" :class="'ph-' + phase.key">{{ phase.label }}</span>
           </div>
-          <p v-if="canEdit && plan.stops.length > 1" class="small muted mb-3">Drag stops to reorder your route. You can also use the position selector or the keyboard on a drag handle.</p>
+          <div v-if="planIssues.length" class="issue-chips mb-3">
+            <span v-for="i in planIssues" :key="i.type" class="issue-chip" :class="isSoft(i) ? 'soft' : 'hard'">
+              <svg class="issue-ico" aria-hidden="true" viewBox="0 0 24 24" width="16" height="16" focusable="false"><path d="M12 3.5 2.5 20h19L12 3.5Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" /><path d="M12 10v4.5M12 17.2v.3" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" /></svg>
+              <span>{{ i.message }}</span>
+              <button v-if="canEdit && i.type === 'no_meal'" type="button" class="btn btn-ghost btn-sm chip-btn" @click="openAdd">Add a meal</button>
+            </span>
+          </div>
+          <p v-if="canEdit && plan.stops.length > 1" class="small muted mb-3">Drag a stop by its handle to reorder your route. With a keyboard, focus a handle, press Space, then use the arrow keys.</p>
           <PlanTimeline :stops="plan.stops" :start="h.startArea" :issues="plan.issues" :active-index="active" :reorderable="canEdit && plan.stops.length > 1" :disabled="saving || busy" @reorder="reorder" @focus="active = $event">
             <template #actions="{ stop, index }">
               <div class="stop-actions">
@@ -317,12 +327,9 @@ const voteSummary = computed(() => {
               </div>
             </template>
           </PlanTimeline>
-          <div v-if="plan.issues.some((i) => i.index === -1)" class="small muted mt-2">
-            <span v-for="i in plan.issues.filter((x) => x.index === -1)" :key="i.type">{{ i.message }}. </span>
-          </div>
-          <div v-if="canEdit" class="d-flex flex-wrap gap-2 mt-3">
-            <button type="button" class="btn btn-secondary btn-sm" :disabled="saving || plan.stops.length >= 6" @click="openAdd">Add a stop</button>
-            <button type="button" class="btn btn-ghost btn-sm" :disabled="busy || saving" @click="generate()">Regenerate</button>
+          <div v-if="canEdit" class="plan-bar" role="group" aria-label="Plan actions">
+            <button type="button" class="btn btn-primary btn-sm" :disabled="saving || plan.stops.length >= 6" @click="openAdd">Add a stop</button>
+            <button type="button" class="btn btn-secondary btn-sm" :disabled="busy || saving" @click="generate()">Regenerate</button>
           </div>
         </div>
 
@@ -450,6 +457,37 @@ const voteSummary = computed(() => {
 .ph-final { background: var(--teal-soft); color: var(--teal-ink); }
 .ph-blocked { background: var(--danger-soft); color: var(--danger); }
 .phase-line { margin: 0 0 8px; }
+.issue-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.issue-chip {
+  display: inline-flex; align-items: center; flex-wrap: wrap; gap: 6px;
+  max-width: 100%; padding: 5px 12px; border-radius: 999px;
+  font-size: 0.84rem; font-weight: 700; line-height: 1.35;
+}
+.issue-chip.soft { background: var(--mustard-soft); color: var(--mustard-ink); }
+.issue-chip.hard { background: var(--danger-soft); color: var(--danger); }
+.issue-ico { flex: none; }
+.chip-btn { --bs-btn-padding-y: 0; --bs-btn-padding-x: 6px; margin-left: 2px; font-weight: 800; text-decoration: underline; }
+.plan-col { --plan-bar-h: 60px; }
+.plan-col.has-bar { padding-bottom: 16px; }
+/* A compact floating toolbar: it reads the same whether it is stuck to the
+   viewport or resting at the end of the plan. */
+.plan-bar {
+  position: sticky;
+  bottom: calc(16px + env(safe-area-inset-bottom));
+  z-index: 5;
+  display: flex; align-items: center; gap: 8px;
+  width: fit-content;
+  margin: 16px 0 0 auto;
+  padding: 8px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  box-shadow: var(--shadow-pop);
+}
+.plan-bar .btn { border-radius: 999px; }
+@media (max-width: 767.98px) {
+  .plan-bar { bottom: calc(var(--nav-h) + 12px + env(safe-area-inset-bottom)); }
+}
 .confirmed { position: relative; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; overflow: visible; }
 .c-spark { position: absolute; top: -20px; left: -14px; }
 .c-stamp {

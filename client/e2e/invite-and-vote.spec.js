@@ -12,7 +12,8 @@ test('an invite link lets Priya join the seeded hangout and the host sees her', 
   // so the host's open page sees the guest's join (via the storage event or a reload).
   await signInAs(page, 'Mei Lin')
   await page.goto('/h/h-catchup')
-  const invite = page.getByLabel('Invite link')
+  await page.getByRole('button', { name: /^People/ }).click()
+  const invite = page.getByRole('textbox', { name: 'Invite link' })
   await expect(invite).toBeVisible()
   const link = await invite.inputValue()
   expect(link).toMatch(/\/j\/catchup1$/)
@@ -31,5 +32,6 @@ test('an invite link lets Priya join the seeded hangout and the host sees her', 
   await expect(guest.getByRole('heading', { level: 1, name: 'Saturday catch-up' })).toBeVisible()
 
   await page.reload()
-  await expect(page.getByRole('region', { name: 'People' }).getByText('Priya Raman', { exact: true })).toBeVisible()
+  await page.getByRole('button', { name: /^People/ }).click()
+  await expect(page.getByRole('dialog', { name: 'People and invite link' }).getByText('Priya Raman', { exact: true })).toBeVisible()
 })

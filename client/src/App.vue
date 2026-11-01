@@ -3,6 +3,7 @@ import AppHeader from './components/AppHeader.vue'
 import BottomNav from './components/BottomNav.vue'
 import ToastHost from './components/ToastHost.vue'
 import AppTour from './components/AppTour.vue'
+import ConfirmHost from './components/ConfirmHost.vue'
 </script>
 
 <template>
@@ -16,6 +17,7 @@ import AppTour from './components/AppTour.vue'
   <BottomNav />
   <ToastHost />
   <AppTour />
+  <ConfirmHost />
 </template>
 
 <style>

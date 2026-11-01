@@ -7,6 +7,7 @@ import { getTheme, setTheme } from '../lib/theme.js'
 import OpenJioWordmark from './brand/OpenJioWordmark.vue'
 import UserAvatar from './UserAvatar.vue'
 import { toast } from '../lib/toast.js'
+import { confirmDialog } from '../lib/confirm.js'
 
 const route = useRoute()
 const router = useRouter()
@@ -14,7 +15,6 @@ const user = computed(() => {
   revision.value
   return session.userId ? currentUser() : null
 })
-const landing = computed(() => route.name === 'home' && !session.userId)
 const menuOpen = ref(false)
 const menuEl = ref(null)
 const theme = ref(getTheme())
@@ -56,18 +56,21 @@ function doSignOut() {
   signOut()
   router.push({ name: 'signin' })
 }
-function doReset() {
-  if (!window.confirm('Reset all demo data to the starting sample? Your plans in this browser will be replaced.')) return
+async function doReset() {
+  if (!(await confirmDialog({ title: 'Reset demo data?', message: 'Everything in this browser goes back to the starting sample, including your plans.', confirmLabel: 'Reset', danger: true }))) return
   resetDemo()
   toast('Demo data reset')
   router.push('/')
 }
-const links = [
-  { to: '/', label: 'Home', key: 'home' },
+const allLinks = [
+  { to: '/', label: 'Home', key: 'home', auth: true },
   { to: '/discover', label: 'Discover', key: 'discover' },
   { to: '/discover?type=hangout', label: 'Open jios', key: 'openjios' },
   { to: '/how', label: 'How it works', key: 'how' },
 ]
+// Signed-out visitors see the same public links on every page, landing included;
+// pages that need an account are left out so no link lands on a sign-in wall.
+const links = computed(() => allLinks.filter((l) => !l.auth || session.userId))
 function isActive(key) {
   if (key === 'openjios') return route.name === 'discover' && route.query.type === 'hangout'
   if (key === 'discover') return route.name === 'discover' && route.query.type !== 'hangout'
@@ -82,7 +85,7 @@ function isActive(key) {
         <OpenJioWordmark :size="32" />
       </RouterLink>
 
-      <nav v-if="!landing" class="main-nav" aria-label="Main">
+      <nav class="main-nav" aria-label="Main">
         <RouterLink v-for="l in links" :key="l.key" :to="l.to" class="nav-link-x" :class="{ active: isActive(l.key) }" :aria-current="isActive(l.key) ? 'page' : undefined">{{ l.label }}</RouterLink>
       </nav>
 

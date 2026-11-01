@@ -3,9 +3,14 @@ import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { setRequired, leaveHangout, renewInvite } from '../api/index.js'
 import { toast, toastError } from '../lib/toast.js'
+import { confirmDialog } from '../lib/confirm.js'
 import UserAvatar from './UserAvatar.vue'
 
-const props = defineProps({ detail: { type: Object, required: true } })
+// Member list and invite link. It is rendered inside the hangout's people popover, which supplies
+// the card, the "People" heading and the count, so this component draws no chrome of its own.
+const props = defineProps({
+  detail: { type: Object, required: true },
+})
 const router = useRouter()
 const h = computed(() => props.detail.hangout)
 const isHost = computed(() => h.value.myRole === 'host')
@@ -38,7 +43,12 @@ async function toggleRequired(m) {
   }
 }
 async function leave() {
-  if (!window.confirm('Leave this hangout? Your availability and votes will be removed.')) return
+  if (!(await confirmDialog({
+    title: 'Leave this hangout?',
+    message: 'Your availability and votes will be removed.',
+    confirmLabel: 'Leave',
+    danger: true,
+  }))) return
   try {
     await leaveHangout(h.value.id)
     toast('You left the hangout')
@@ -48,7 +58,11 @@ async function leave() {
   }
 }
 async function renew() {
-  if (!window.confirm('Make a new link? The old link will stop working.')) return
+  if (!(await confirmDialog({
+    title: 'Make a new invite link?',
+    message: 'The old link will stop working.',
+    confirmLabel: 'Make new link',
+  }))) return
   try {
     await renewInvite(h.value.id)
     toast('New invite link ready')
@@ -60,11 +74,7 @@ const canInvite = computed(() => h.value.mode !== 'solo' && !['ended', 'cancelle
 </script>
 
 <template>
-  <section class="card-x" aria-labelledby="people-h">
-    <div class="d-flex justify-content-between align-items-baseline mb-2">
-      <h3 id="people-h" class="h6 small-caps m-0">People</h3>
-      <span class="small muted">{{ detail.members.length }}<template v-if="h.capacity"> of {{ h.capacity }}</template></span>
-    </div>
+  <div class="mp">
     <ul class="people">
       <li v-for="m in detail.members" :key="m.userId" class="p">
         <UserAvatar :user="m.user" :size="32" />
@@ -77,7 +87,7 @@ const canInvite = computed(() => h.value.mode !== 'solo' && !['ended', 'cancelle
         <button
           v-if="isHost && m.role !== 'host' && h.stage === 'collecting'"
           type="button"
-          class="btn btn-ghost btn-sm"
+          class="btn btn-ghost btn-sm p-req"
           :aria-label="`${m.required ? 'Make optional' : 'Make required'}: ${m.user.name}`"
           @click="toggleRequired(m)"
         >{{ m.required ? 'Make optional' : 'Make required' }}</button>
@@ -94,13 +104,17 @@ const canInvite = computed(() => h.value.mode !== 'solo' && !['ended', 'cancelle
       <button v-if="isHost" type="button" class="btn btn-ghost btn-sm px-0 mt-1" @click="renew">Make a new link</button>
     </template>
     <button v-if="!isHost" type="button" class="btn btn-ghost btn-sm px-0 mt-2 text-danger" @click="leave">Leave hangout</button>
-  </section>
+  </div>
 </template>
 
 <style scoped>
-.people { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
-.p { display: flex; align-items: center; gap: 10px; }
+.people { list-style: none; padding: 0; margin: 0; }
+.p { display: flex; align-items: center; gap: 10px; padding: 8px 0; }
+.p + .p { border-top: 1px solid var(--line); }
 .p-txt { display: flex; flex-direction: column; flex: 1; min-width: 0; line-height: 1.3; }
 .p-name { font-weight: 600; font-size: 0.95rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.invite { display: flex; gap: 6px; }
+.p-req { margin-left: auto; flex: 0 0 auto; white-space: nowrap; padding-right: 4px; }
+.invite { display: flex; align-items: center; gap: 6px; }
+.invite .form-control { flex: 1 1 auto; min-width: 0; }
+.invite .btn { flex: 0 0 auto; }
 </style>

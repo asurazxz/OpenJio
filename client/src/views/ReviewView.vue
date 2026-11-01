@@ -3,6 +3,7 @@ import { ref, computed, watch } from 'vue'
 import { listDrafts, publishDraft, rejectDraft, unpublish, AREAS, INTERESTS } from '../api/index.js'
 import { useLive } from '../composables/useLive.js'
 import { toast, toastError } from '../lib/toast.js'
+import { confirmDialog } from '../lib/confirm.js'
 import { fmtDay, fmtTime, toMs } from '../lib/time.js'
 import { TYPE_LABEL, TYPE_TONE, sourceLine } from '../lib/labels.js'
 import { hoursToEditor, hoursFromEditor } from '../lib/review.js'
@@ -95,7 +96,7 @@ function postedText(d) {
 const busyId = ref(null)
 
 async function reject(d) {
-  if (!window.confirm(`Reject "${d.title || 'this draft'}"? It will stay out of Discover.`)) return
+  if (!(await confirmDialog({ title: 'Reject this draft?', message: `"${d.title || 'this draft'}" will stay out of Discover.`, confirmLabel: 'Reject', danger: true }))) return
   busyId.value = d.id
   try {
     await rejectDraft(d.id)
@@ -109,7 +110,7 @@ async function reject(d) {
 }
 
 async function removeListing(p) {
-  if (!window.confirm(`Unpublish "${p.title}"? It will disappear from Discover.`)) return
+  if (!(await confirmDialog({ title: 'Unpublish this listing?', message: `"${p.title}" will disappear from Discover.`, confirmLabel: 'Unpublish', danger: true }))) return
   busyId.value = p.id
   try {
     await unpublish(p.id)

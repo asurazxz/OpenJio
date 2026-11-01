@@ -9,7 +9,7 @@ async function request(path, params, signal) {
     response = await fetch(`${base}/api/places/${path}?${new URLSearchParams(params)}`, { headers: token ? { Authorization: `Bearer ${token}` } : {}, signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(10000)]) : AbortSignal.timeout(10000) })
   } catch (error) {
     if (signal?.aborted) throw error
-    throw new Error('Place search could not be reached. Try again or enter the place manually.')
+    throw new Error('Place search is unavailable right now (the OpenJio server may not be running). Try again or use Enter manually.')
   }
   const data = await response.json().catch(() => ({}))
   if (!response.ok) throw new Error(data.message || 'Place search is unavailable. You can enter the place manually.')

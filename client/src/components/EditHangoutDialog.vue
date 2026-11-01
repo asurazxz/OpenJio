@@ -3,6 +3,7 @@ import { ref, computed, watch } from 'vue'
 import { updateHangout, AREAS } from '../api/index.js'
 import { sgDateKey, sgParts } from '../lib/time.js'
 import { toast } from '../lib/toast.js'
+import { confirmDialog } from '../lib/confirm.js'
 import AppDialog from './AppDialog.vue'
 
 const props = defineProps({ open: Boolean, hangout: { type: Object, required: true } })
@@ -23,7 +24,7 @@ async function save() {
   if (saving.value) return
   const f = form.value, h = props.hangout
   const datesChanged = !h.lockedSlot && (f.dateFrom !== h.dateFrom || f.dateTo !== h.dateTo)
-  if (datesChanged && !window.confirm('Changing these dates clears the group’s old availability responses. Continue?')) return
+  if (datesChanged && !(await confirmDialog({ title: 'Change the dates?', message: 'The group’s old availability responses will be cleared.', confirmLabel: 'Change dates', danger: true }))) return
   const patch = { title: f.title, description: f.description, area: f.area }
   if (h.visibility === 'public') patch.capacity = Number(f.capacity)
   if (datesChanged) Object.assign(patch, { dateFrom: f.dateFrom, dateTo: f.dateTo })

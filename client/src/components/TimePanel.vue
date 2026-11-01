@@ -5,8 +5,10 @@ import { saveAvailability, clearAvailability, getSlots, lockSlot, unlockSlot, pr
 import { useLive } from '../composables/useLive.js'
 import { dateKeysBetween, fmtRange, fmtDuration, MIN, sgDateKey, sgParts, sgTime } from '../lib/time.js'
 import { toast, toastError } from '../lib/toast.js'
+import { confirmDialog } from '../lib/confirm.js'
 import AvailabilityGrid from './AvailabilityGrid.vue'
 import AppDialog from './AppDialog.vue'
+import UserAvatar from './UserAvatar.vue'
 
 const props = defineProps({ detail: { type: Object, required: true } })
 const emit = defineEmits(['locked'])
@@ -25,7 +27,7 @@ watch(
   },
 )
 // Warn before leaving with free times that were marked but not saved.
-const guard = () => !dirty.value || window.confirm('Leave without saving your free times?')
+const guard = () => !dirty.value || confirmDialog({ title: 'Leave without saving?', message: 'Your free times are marked but not saved.', confirmLabel: 'Leave', cancelLabel: 'Stay', danger: true })
 onBeforeRouteLeave(guard)
 onBeforeRouteUpdate((to, from) => (to.query.tab !== from.query.tab ? guard() : true))
 const onUnload = (e) => {
@@ -33,6 +35,7 @@ const onUnload = (e) => {
 }
 onMounted(() => window.addEventListener('beforeunload', onUnload))
 onBeforeUnmount(() => window.removeEventListener('beforeunload', onUnload))
+onBeforeUnmount(() => clearTimeout(previewTimer))
 function onEdit(v) {
   mine.value = v
   dirty.value = true
@@ -48,8 +51,20 @@ const previewing = ref(false)
 const previewError = ref('')
 const lockingId = ref(null)
 let previewRequest = 0
+let previewTimer = null
 const isSoloOrPublic = computed(() => h.value.visibility === 'public' || h.value.mode === 'solo')
-const endTimes = Array.from({ length: 49 }, (_, i) => `${String(Math.floor(i / 2)).padStart(2, '0')}:${i % 2 ? '30' : '00'}`)
+// 24-hour values stay as "HH:MM" (inputSlot parses them); only the labels are shown in 12-hour time.
+const halfHours = Array.from({ length: 49 }, (_, i) => `${String(Math.floor(i / 2)).padStart(2, '0')}:${i % 2 ? '30' : '00'}`)
+// Keep an off-grid value (for example from a custom slot) selectable so editing never silently drops it.
+const withCurrent = (list, value) => (value && !list.includes(value) ? [...list, value].sort() : list)
+const startOptions = computed(() => withCurrent(halfHours.slice(0, 48), adjust.value?.start))
+const endOptions = computed(() => withCurrent(halfHours.slice(1), adjust.value?.end))
+function label12(hhmm) {
+  if (hhmm === '24:00') return '12:00 am (midnight)'
+  const [hh, mm] = hhmm.split(':').map(Number)
+  const hour = hh % 12 === 0 ? 12 : hh % 12
+  return `${hour}:${String(mm).padStart(2, '0')} ${hh < 12 ? 'am' : 'pm'}`
+}
 function inputSlot() {
   if (!adjust.value) return null
   const [y, m, d] = adjust.value.date.split('-').map(Number)
@@ -63,7 +78,14 @@ function editSlot(slot = null) {
   const isMidnightEnd = sgDateKey(source.end - 1) === date && q.hour === 0 && q.minute === 0
   adjust.value = { date, start: `${String(p.hour).padStart(2, '0')}:${String(p.minute).padStart(2, '0')}`, end: isMidnightEnd ? '24:00' : `${String(q.hour).padStart(2, '0')}:${String(q.minute).padStart(2, '0')}` }
 }
-function invalidatePreview() { preview.value = null; previewError.value = ''; previewRequest++; previewing.value = false }
+function invalidatePreview() { clearTimeout(previewTimer); previewTimer = null; preview.value = null; previewError.value = ''; previewRequest++; previewing.value = false }
+// Re-check attendance shortly after the last edit so the result always matches the inputs.
+function schedulePreview() {
+  clearTimeout(previewTimer)
+  previewing.value = true
+  previewTimer = setTimeout(() => { previewTimer = null; checkPreview() }, 300)
+}
+function touchPreview() { invalidatePreview(); if (adjust.value) schedulePreview() }
 function closeAdjust() { adjust.value = null; invalidatePreview() }
 function openComparison() { chosen.value = null; comparisonOpen.value = true }
 function closeComparison() { comparisonOpen.value = false; chosen.value = null }
@@ -71,10 +93,13 @@ watch(() => [h.value.id, h.value.dateFrom, h.value.dateTo, h.value.lockedSlot, i
   invalidatePreview()
   if (!isHost.value || isSoloOrPublic.value || h.value.lockedSlot) adjust.value = null
 }, { deep: true })
-watch(slots, () => { if (adjust.value) invalidatePreview() }, { deep: true })
+watch(slots, () => { if (adjust.value) touchPreview() }, { deep: true })
+// Any change to date, start or end (including opening the dialog) clears the old result and re-checks automatically.
+watch(() => (adjust.value ? [adjust.value.date, adjust.value.start, adjust.value.end].join('|') : ''), (key) => { if (key) touchPreview() })
 async function checkPreview() {
+  if (!adjust.value) return
   const slot = inputSlot()
-  if (!slot || !Number.isFinite(slot.start) || !Number.isFinite(slot.end) || slot.end <= slot.start) { preview.value = null; previewError.value = 'End time must be after start time.'; return }
+  if (!slot || !Number.isFinite(slot.start) || !Number.isFinite(slot.end) || slot.end <= slot.start) { previewRequest++; previewing.value = false; preview.value = null; previewError.value = 'End time must be after start time.'; return }
   const request = ++previewRequest
   previewing.value = true
   preview.value = null
@@ -102,6 +127,19 @@ function breakdown(slot) {
 }
 const totalMins = computed(() => mine.value.reduce((a, i) => a + (i.end - i.start) / MIN, 0))
 
+// Reply strip: who has answered and who is still waiting.
+const showReplies = computed(() => !h.value.lockedSlot && h.value.mode === 'group' && !isSoloOrPublic.value)
+const firstName = (name) => (name || 'there').split(' ')[0]
+const memberName = (m) => m.user?.name || 'Member'
+const repliedMembers = computed(() => props.detail.members.filter((m) => m.respondedAt))
+const pendingMembers = computed(() => props.detail.members.filter((m) => !m.respondedAt))
+const replySummary = computed(() => {
+  const parts = []
+  if (repliedMembers.value.length) parts.push(`Replied: ${repliedMembers.value.map((m) => firstName(memberName(m))).join(', ')}`)
+  if (pendingMembers.value.length) parts.push(`Waiting for: ${pendingMembers.value.map((m) => memberName(m) + (m.required ? ' (required)' : '')).join(', ')}`)
+  return parts.join('. ')
+})
+const memberTitle = (m) => `${memberName(m)}${m.required ? ', required' : ''}, ${m.respondedAt ? 'replied' : 'not replied yet'}`
 async function save() {
   saving.value = true
   try {
@@ -140,7 +178,7 @@ async function lock(slot) {
   }
 }
 async function unlock() {
-  if (!window.confirm('Change the time? Everyone will need to agree on the plan again.')) return
+  if (!(await confirmDialog({ title: 'Change the time?', message: 'Everyone will need to agree on the plan again.', confirmLabel: 'Change time', danger: true }))) return
   try {
     await unlockSlot(h.value.id)
   } catch (e) {
@@ -160,6 +198,22 @@ async function unlock() {
     </div>
 
     <template v-else>
+      <section v-if="showReplies" class="replies" aria-label="Reply status">
+        <div class="rp-left">
+          <div class="rp-faces" role="group" :aria-label="replySummary">
+            <span v-for="m in detail.members" :key="m.userId" class="rp-av" :class="m.respondedAt ? 'done' : 'pending'" :title="memberTitle(m)" aria-hidden="true">
+              <UserAvatar :user="m.user" :size="28" />
+              <span v-if="!m.respondedAt && m.required" class="visually-hidden">required</span>
+            </span>
+          </div>
+          <p class="rp-count tnum m-0">{{ repliedMembers.length }} of {{ detail.members.length }} replied</p>
+        </div>
+        <p v-if="!pendingMembers.length" class="rp-done m-0">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>
+          Everyone has replied
+        </p>
+      </section>
+
       <div class="seg d-lg-none" role="tablist" aria-label="Availability view">
         <button type="button" role="tab" :aria-selected="view === 'mine'" :class="{ on: view === 'mine' }" @click="view = 'mine'">Your times</button>
         <button type="button" role="tab" :aria-selected="view === 'group'" :class="{ on: view === 'group' }" @click="view = 'group'">
@@ -266,13 +320,14 @@ async function unlock() {
           </section>
           <section class="adjust-form" aria-label="Adjust proposed time">
           <h3 class="h5">Adjust proposed time</h3>
-          <p class="small muted">Preview attendance before locking. Required people must be available for the full time.</p>
+          <p class="small muted">Required people must be available for the full time. Attendance updates as you change the time.</p>
           <div class="row g-3">
-            <div class="col-12 col-sm-4"><label for="slot-date" class="form-label">Date</label><input id="slot-date" v-model="adjust.date" type="date" class="form-control" :min="h.dateFrom" :max="h.dateTo" @input="invalidatePreview" /></div>
-            <div class="col-6 col-sm-4"><label for="slot-start" class="form-label">Start time</label><input id="slot-start" v-model="adjust.start" type="time" class="form-control" @input="invalidatePreview" /></div>
-            <div class="col-6 col-sm-4"><label for="slot-end" class="form-label">End time</label><select id="slot-end" v-model="adjust.end" class="form-select" @change="invalidatePreview"><option v-for="time in endTimes" :key="time" :value="time">{{ time }}</option></select><span class="small muted">24:00 means midnight at the end of this date.</span></div>
+            <div class="col-12"><label for="slot-date" class="form-label">Date</label><input id="slot-date" v-model="adjust.date" type="date" class="form-control" :min="h.dateFrom" :max="h.dateTo" /></div>
+            <div class="col-6"><label for="slot-start" class="form-label">Start time</label><select id="slot-start" v-model="adjust.start" class="form-select"><option v-for="time in startOptions" :key="time" :value="time">{{ label12(time) }}</option></select></div>
+            <div class="col-6"><label for="slot-end" class="form-label">End time</label><select id="slot-end" v-model="adjust.end" class="form-select"><option v-for="time in endOptions" :key="time" :value="time">{{ label12(time) }}</option></select></div>
           </div>
           <div v-if="previewError" class="notice danger mt-3" role="alert">{{ previewError }}</div>
+          <p class="small muted mt-2 mb-0" role="status">{{ previewing ? 'Checking who can come…' : '' }}</p>
           <div v-if="preview" class="notice mt-3" :class="{ danger: !preview.ok }" aria-live="polite">
             <strong>{{ preview.ok ? 'This time can be locked' : 'This time needs changes' }}</strong>
             <p v-for="error in preview.errors" :key="error" class="small mb-1">{{ error }}</p>
@@ -283,7 +338,6 @@ async function unlock() {
           </div>
           <div class="d-flex justify-content-end gap-2 mt-3">
             <button type="button" class="btn btn-ghost" @click="closeAdjust">Cancel</button>
-            <button type="button" class="btn btn-secondary" :disabled="previewing" @click="checkPreview"><span v-if="previewing" class="spinner-border spinner-border-sm me-1" aria-hidden="true"></span>Preview attendance</button>
             <button type="button" class="btn btn-primary" :disabled="!preview?.ok || preview.start !== inputSlot()?.start || preview.end !== inputSlot()?.end" @click="lockPreview">Lock this time</button>
           </div>
           </section>
@@ -355,6 +409,16 @@ async function unlock() {
   .compare-layout, .adjust-layout { grid-template-columns: 1fr; }
   .adjust-layout .overlap-grid { max-height: 32vh; }
 }
+.replies { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px 14px; padding: 12px 14px; margin-bottom: 16px; border: 1px solid var(--line); border-radius: 16px; background: var(--card); }
+.rp-left { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; min-width: 0; }
+.rp-faces { display: flex; align-items: center; padding: 3px 0; }
+.rp-av { position: relative; display: inline-grid; border-radius: 50%; }
+.rp-av + .rp-av { margin-left: 6px; }
+.rp-av.pending { outline: 1.5px dashed var(--line-strong); outline-offset: 2px; }
+.rp-av.pending :deep(.avatar) { background: var(--paper-2); color: var(--ink-2); border-style: dashed; border-color: var(--line-strong); }
+.rp-av.done { box-shadow: 0 0 0 2px var(--card), 0 0 0 4px var(--oj-teal); }
+.rp-count { font-weight: 700; color: var(--ink); font-size: 0.92rem; }
+.rp-done { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; font-size: 0.92rem; color: var(--teal-ink); }
 :deep(.dlg.overlap-dialog) { width: min(1120px, calc(100vw - 32px)); }
 @media (max-width: 767.98px) { :deep(.dlg.overlap-dialog) { width: calc(100vw - 12px); max-height: calc(100vh - 12px); border-radius: 20px; } }
 </style>
