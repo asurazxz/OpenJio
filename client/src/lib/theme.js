@@ -1,4 +1,4 @@
-// Light/dark preference. "system" follows the OS; the choice is a per-browser convenience.
+// Start in light mode. Explicit choices persist per browser; "system" follows the OS.
 // data-theme drives the OpenJio tokens; data-bs-theme keeps Bootstrap components in step.
 const KEY = 'openjio:theme'
 const CHOICES = ['system', 'light', 'dark']
@@ -7,14 +7,14 @@ const media = typeof matchMedia === 'function' ? matchMedia('(prefers-color-sche
 export function getTheme() {
   try {
     const saved = localStorage.getItem(KEY)
-    return CHOICES.includes(saved) ? saved : 'system'
+    return CHOICES.includes(saved) ? saved : 'light'
   } catch {
-    return 'system'
+    return 'light'
   }
 }
 
 export function setTheme(value) {
-  value = CHOICES.includes(value) ? value : 'system'
+  value = CHOICES.includes(value) ? value : 'light'
   try {
     localStorage.setItem(KEY, value)
   } catch {
