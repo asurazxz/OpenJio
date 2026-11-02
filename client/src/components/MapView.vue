@@ -201,6 +201,9 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   ro?.disconnect()
+  // Leaflet ends a zoom animation from an untracked 250 ms timer that reads the removed panes.
+  // Marking the zoom finished turns that timer into a no-op when the page closes mid-zoom.
+  if (map) map._animatingZoom = false
   map?.remove()
   map = null
   clusterGroup = null

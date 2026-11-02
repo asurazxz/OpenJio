@@ -72,6 +72,20 @@ test('live places appear in listListings and getListing, de-duplicated by id', a
   assert.equal(state.published.length, 0, 'live places are never written to shared state')
 })
 
+test('a live place naming the same nearby venue as a curated listing is not listed twice', async () => {
+  const state = freshState()
+  const sample = { ...osmPlace('x'), id: 'pl-garden', title: 'The Garden', source: { kind: 'sample' } }
+  const twin = osmPlace('garden', { title: 'Garden', lat: sample.lat + 0.0005 })
+  const elsewhere = osmPlace('garden-east', { title: 'Garden', lat: sample.lat + 0.05 })
+  const api = engine({ state, catalogue: [sample], fetchPlaces: async () => [twin, elsewhere, osmPlace('b')] })
+  const ids = (await api.listListings()).map((l) => l.id)
+  assert.ok(ids.includes('pl-garden'))
+  assert.ok(!ids.includes('osm-garden'), 'the nearby twin is dropped')
+  assert.ok(ids.includes('osm-garden-east'), 'a same-named place far away is a different venue')
+  assert.ok(ids.includes('osm-b'))
+  assert.equal((await api.getListing('osm-garden')).title, 'Garden', 'plans that already use the twin still resolve it')
+})
+
 test('generatePlan can use a live place as a stop', async () => {
   const state = freshState()
   const api = engine({ state, fetchPlaces: async () => [osmPlace('a', { interests: ['arts'] }), osmPlace('b', { interests: ['outdoors'] }), osmPlace('c', { interests: ['shopping'] })] })

@@ -45,3 +45,18 @@ test('Mei creates a group plan, locks a time, generates and confirms a plan', as
   await page.getByRole('button', { name: 'Find where to meet them' }).click()
   await expect(page.getByText(/Meet them at|No stop works from there/)).toBeVisible()
 })
+
+for (const [mode, submit, title] of [['solo', 'Create plan', 'E2E solo afternoon'], ['public', 'Create open jio', 'E2E open makan']]) {
+  test(`creating a ${mode} plan opens it directly, without an unsaved-changes prompt`, async ({ page }) => {
+    await signInAs(page, 'Priya Raman')
+    await page.goto(`/new?mode=${mode}`)
+    await page.getByLabel('Name', { exact: true }).fill(title)
+    await page.getByRole('button', { name: 'Makan' }).click()
+    for (let i = 0; i < 3; i++) await page.getByRole('button', { name: 'Next' }).click()
+    await page.getByRole('button', { name: submit, exact: true }).click()
+
+    await expect(page).toHaveURL(/\/h\/[^/?]+\?created=1$/)
+    await expect(page.getByRole('heading', { level: 1, name: title })).toBeVisible()
+    await expect(page.getByRole('dialog', { name: 'Leave without saving?' })).toHaveCount(0)
+  })
+}

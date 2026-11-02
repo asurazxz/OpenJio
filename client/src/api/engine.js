@@ -6,6 +6,7 @@ import { isVerifiedDeal } from '../lib/algo/validity.js'
 import { fromDateKey, toMs, toIso, sgDateKey, DAY, MIN } from '../lib/time.js'
 import { assessSlot } from '../lib/slot-assessment.js'
 import { customPlace } from '../lib/custom-place.js'
+import { haversineKm } from '../lib/geo.js'
 import { preparePublication } from '../lib/review.js'
 
 // How long fetched pipeline drafts are reused before asking the server again.
@@ -185,11 +186,32 @@ async function loadPlaces() {
   return placesState.places
 }
 
-// Sync read of the cached live places, minus any id already curated or published.
+// Same name within this distance counts as the same venue listed by two sources.
+const SAME_VENUE_KM = 0.5
+const venueName = (title) => String(title ?? '').toLowerCase().replace(/^the\s+/, '').replace(/[^a-z0-9]+/g, '')
+
+// Sync read of the cached live places, minus any id or venue already curated or published,
+// so one venue never appears (or gets scheduled) twice.
 function livePlaces(s) {
   if (!placesState.places.length) return []
-  const taken = new Set([...LISTINGS, ...s.published].map((l) => l.id))
-  return placesState.places.filter((p) => !taken.has(p.id))
+  const kept = [...LISTINGS, ...s.published]
+  const taken = new Set(kept.map((l) => l.id))
+  const byName = new Map()
+  const claim = (l) => {
+    const key = venueName(l.title)
+    if (!byName.has(key)) byName.set(key, [])
+    byName.get(key).push(l)
+  }
+  kept.forEach(claim)
+  const out = []
+  for (const p of placesState.places) {
+    if (taken.has(p.id)) continue
+    const twins = byName.get(venueName(p.title)) ?? []
+    if (twins.some((l) => Number.isFinite(l.lat) && Number.isFinite(p.lat) && haversineKm(l, p) <= SAME_VENUE_KM)) continue
+    claim(p)
+    out.push(p)
+  }
+  return out
 }
 
 function allListings(s, auto = []) {
@@ -254,7 +276,8 @@ function stopCandidates(s) {
 }
 
 function findListing(s, id) {
-  return allListings(s).find((l) => l.id === id) || null
+  // Plans saved before a live place was recognised as a duplicate still resolve it by id.
+  return allListings(s).find((l) => l.id === id) || placesState.places.find((p) => p.id === id) || null
 }
 
 function findPlanListing(s, h, id) {

@@ -11,8 +11,12 @@ test('Discover starts with an actionable map and keeps interest filters behind a
   await expect(filters).toContainText('1')
   await filters.click()
   await expect(page.getByRole('group', { name: 'Interests', exact: true })).toBeHidden()
+  // Closing the panel keeps Arts active; clear it before searching for a Museums-only listing.
+  await page.getByRole('button', { name: 'Remove Arts filter', exact: true }).click()
+  await expect(filters).toHaveText('Filters')
   await page.getByRole('searchbox', { name: 'Search', exact: true }).fill('Peranakan Museum')
-  const marker = page.locator('.leaflet-marker-icon').first()
+  // Live data can add nearby matches that merge into a cluster bubble; target a single pin.
+  const marker = page.locator('.leaflet-marker-icon:not(.oj-cluster)').first()
   await expect(marker).toBeVisible()
   await marker.click()
   const dialog = page.getByRole('dialog')

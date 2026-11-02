@@ -69,9 +69,11 @@ const form = ref({
   description: '',
 })
 const submitting = ref(false)
+// Set once the plan exists, so the redirect to it is not mistaken for abandoning unsaved work.
+const saved = ref(false)
 const errors = ref({})
 const originalForm = JSON.stringify(form.value)
-useUnsavedChanges(() => !created.value && !submitting.value && JSON.stringify(form.value) !== originalForm, 'Leave without saving this new plan?')
+useUnsavedChanges(() => !saved.value && !submitting.value && JSON.stringify(form.value) !== originalForm, 'Leave without saving this new plan?')
 const minDate = sgDateKey(today)
 
 const placeholder = computed(() => ({ group: 'Friday makan…', solo: 'Free afternoon…', public: 'Sunday hawker crawl…' })[mode.value])
@@ -175,6 +177,7 @@ async function submit() {
       capacity: f.capacity,
       description: f.description,
     })
+    saved.value = true
     if (mode.value === 'group') {
       created.value = h
       focusStep()

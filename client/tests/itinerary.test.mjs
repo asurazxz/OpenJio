@@ -61,6 +61,18 @@ test('retime flags overruns, closures and double meals', () => {
   assert.ok(u.issues.some((i) => i.type === 'unknown_hours'))
 })
 
+test('reasons do not claim a fit or a meal that validation rejects', () => {
+  const bad = retime([L[0], L[1]], { ...base, slot: { start: sat(12), end: sat(14) } })
+  const types = bad.issues.map((i) => i.type)
+  assert.ok(types.includes('over_time') && types.includes('no_meal'))
+  assert.ok(!bad.reasons.some((r) => r.startsWith('Fits your slot')), bad.reasons.join(' | '))
+  assert.ok(bad.reasons.some((r) => r.includes('outside your slot')))
+  assert.ok(!bad.reasons.some((r) => r.startsWith('Covers')))
+  const good = generateItinerary(base)
+  assert.ok(good.reasons.some((r) => r.startsWith('Fits your slot')))
+  assert.ok(good.reasons.includes('Covers lunch'))
+})
+
 test('alternatives keep the plan feasible and match the stop kind', () => {
   const plan = generateItinerary(base)
   const listings = plan.stops.map((s) => s.listing)

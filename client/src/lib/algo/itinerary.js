@@ -311,7 +311,10 @@ export function explain(stops, parts, ctx) {
   const n = stops.length
   const first = stops[0]
   const last = stops[n - 1]
-  const out = [`Fits your slot: ${fmtTime(first.start)} to ${fmtTime(last.end)}`]
+  // Reasons only claim what holds: manual plans can overrun the slot or miss a meal.
+  const fits = first.start >= ctx.slot.start && last.end <= ctx.slot.end
+  const span = `${fmtTime(first.start)} to ${fmtTime(last.end)}`
+  const out = [fits ? `Fits your slot: ${span}` : `Runs ${span}, outside your slot`]
   if (ctx.members.length > 1) {
     const matched = ctx.members.filter((m) => stops.some((s) => memberScore(s.listing, m) >= 0.6)).length
     out.push(`Matches the interests of ${matched} of ${ctx.members.length} members`)
@@ -319,7 +322,8 @@ export function explain(stops, parts, ctx) {
   out.push(`About ${fmtDuration(parts.travelMins)} of travel in total`)
   const deals = stops.filter((s) => isVerifiedDeal(s.listing)).length
   if (deals) out.push(deals === 1 ? 'Includes 1 verified deal' : `Includes ${deals} verified deals`)
-  if (ctx.meals.length) out.push(`Covers ${ctx.meals.map((m) => m.name).join(' and ')}`)
+  const meals = ctx.meals.filter((w) => stops.some((s) => coversMeal(s, w)))
+  if (meals.length) out.push(`Covers ${meals.map((m) => m.name).join(' and ')}`)
   return out
 }
 
