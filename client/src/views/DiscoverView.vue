@@ -5,7 +5,7 @@ import { listListings, listMyHangouts, addToShortlist, currentUser, session, ARE
 import { useLive } from '../composables/useLive.js'
 import { rankListings, capByKind } from '../lib/algo/discover.js'
 import { fmtRange, fmtDateKey, toMs, sgParts, sgTime, DAY, HOUR } from '../lib/time.js'
-import { TYPE_LABEL, TYPE_TONE, interestLabel, areaLabel, sourceLine } from '../lib/labels.js'
+import { TYPE_LABEL, TYPE_TONE, interestLabel, areaLabel, sourceLine, spotsText } from '../lib/labels.js'
 import { toast, toastError } from '../lib/toast.js'
 import ListingCard from '../components/ListingCard.vue'
 import MapView from '../components/MapView.vue'
@@ -27,7 +27,9 @@ const filtersOpen = ref(false)
 const forYou = ref(true)
 const area = ref(typeof route.query.area === 'string' ? route.query.area : '')
 const when = ref(typeof route.query.when === 'string' ? route.query.when : typeof route.query.for === 'string' ? `h:${route.query.for}` : 'any')
-const view = ref(route.query.view === 'cards' ? 'cards' : 'map')
+// Open Jios are picked by time and spots rather than place, so that view opens on Cards. An explicit ?view= wins.
+const viewFor = (query) => (query.view === 'map' || query.view === 'cards' ? query.view : query.type === 'hangout' ? 'cards' : 'map')
+const view = ref(viewFor(route.query))
 const active = ref(null)
 // Caps: the map draws at most MAP_PIN_LIMIT pins; Cards load CARD_PAGE at a time.
 const MAP_PIN_LIMIT = 30
@@ -39,7 +41,7 @@ watch(() => route.query, (query) => {
   type.value = types.some((t) => t.key === query.type) ? query.type : 'all'
   area.value = typeof query.area === 'string' ? query.area : ''
   when.value = typeof query.when === 'string' ? query.when : typeof query.for === 'string' ? `h:${query.for}` : 'any'
-  view.value = query.view === 'cards' ? 'cards' : 'map'
+  view.value = viewFor(query)
   const tags = typeof query.tags === 'string' ? query.tags.split(',').filter((x) => INTERESTS.some((i) => i.slug === x)) : []
   if (tags.join(',') !== picked.value.join(',')) picked.value = tags
 })
@@ -47,7 +49,7 @@ watch([q, type, area, when, picked], () => { visibleCards.value = CARD_PAGE })
 watch([q, type, area, when, view, picked], () => {
   router.replace({ query: { ...route.query, q: q.value || undefined, type: type.value !== 'all' ? type.value : undefined,
     area: area.value || undefined, when: when.value !== 'any' ? when.value : route.query.for ? 'any' : undefined,
-    view: view.value === 'cards' ? 'cards' : undefined, tags: picked.value.join(',') || undefined } })
+    view: view.value !== viewFor({ type: type.value }) ? view.value : undefined, tags: picked.value.join(',') || undefined } })
 }, { deep: true })
 const filterCount = computed(() => picked.value.length)
 
@@ -57,8 +59,14 @@ const types = [
   { key: 'place', label: 'Places' },
   { key: 'event', label: 'Events' },
   { key: 'deal', label: 'Deals' },
-  { key: 'hangout', label: 'Open jios' },
+  { key: 'hangout', label: 'Open Jios' },
 ]
+
+const hangoutView = computed(() => type.value === 'hangout')
+function setType(key) {
+  if ((key === 'hangout') !== hangoutView.value) view.value = viewFor({ type: key })
+  type.value = key
+}
 
 function weekend() {
   const now = Date.now()
@@ -94,6 +102,9 @@ const near = computed(() => {
   return a ? { lat: a.lat, lng: a.lng } : null
 })
 
+// The home area is the reference point only when no area is picked; a picked area narrows the results instead.
+const nearHome = computed(() => (!area.value && near.value && user.value ? AREAS.find((x) => x.slug === user.value.homeArea) : null))
+
 const results = computed(() => {
   const list = (listings.value || []).filter((l) => {
     if (type.value !== 'all' && l.type !== type.value) return false
@@ -119,6 +130,16 @@ function fmtKeyNow() {
 const pinnable = computed(() => results.value.filter((r) => Number.isFinite(r.listing.lat) && Number.isFinite(r.listing.lng)))
 const pinned = computed(() => capByKind(pinnable.value, MAP_PIN_LIMIT))
 const pinsCapped = computed(() => pinnable.value.length > MAP_PIN_LIMIT)
+// Counts from the same total as the results line, so the two numbers always agree.
+const mapCaption = computed(() => {
+  if (pinned.value.length >= results.value.length) return ''
+  const unpinned = results.value.length - pinnable.value.length
+  return [
+    `Map shows ${pinned.value.length} of ${results.value.length}.`,
+    unpinned ? `${unpinned} without a map location ${unpinned === 1 ? 'is' : 'are'} in Cards.` : '',
+    pinsCapped.value ? 'Filter by area or type to narrow it down.' : '',
+  ].filter(Boolean).join(' ')
+})
 const shownCards = computed(() => results.value.slice(0, visibleCards.value))
 
 const markers = computed(() =>
@@ -135,7 +156,7 @@ const markers = computed(() =>
       location: r.listing.address || areaLabel(r.listing.area),
       when: r.listing.startsAt && r.listing.endsAt ? fmtRange(toMs(r.listing.startsAt), toMs(r.listing.endsAt)) : '',
       price: r.listing.priceText,
-      spots: r.listing.type === 'hangout' && r.listing.capacity ? `${Math.max(0, r.listing.capacity - r.listing.memberCount)} spots left` : '',
+      spots: r.listing.type === 'hangout' && r.listing.capacity ? spotsText(r.listing.capacity, r.listing.memberCount) : '',
     },
   })),
 )
@@ -149,12 +170,12 @@ function toggleInterest(slug) {
 }
 function clearFilters() {
   q.value = ''
-  type.value = 'all'
+  if (!hangoutView.value) type.value = 'all'
   picked.value = []
   area.value = ''
   when.value = 'any'
 }
-const filtered = computed(() => q.value || type.value !== 'all' || picked.value.length || area.value || when.value !== 'any')
+const filtered = computed(() => q.value || (type.value !== 'all' && !hangoutView.value) || picked.value.length || area.value || when.value !== 'any')
 
 /* Detail and add-to-plan */
 const detail = ref(null)
@@ -194,9 +215,14 @@ async function confirmAdd() {
 <template>
   <div class="page discover-page">
     <header class="page-head" data-tour="discover-intro">
-      <template v-if="type === 'hangout'">
-        <h1>Open jios</h1>
-        <p>Public hangouts with spots left. Have a look, then join if it suits you.</p>
+      <template v-if="hangoutView">
+        <div class="head-row">
+          <div>
+            <h1>Open Jios</h1>
+            <p>Public hangouts with spots left. Have a look, then join if it suits you.</p>
+          </div>
+          <RouterLink to="/new?mode=public" class="btn btn-primary">Host an Open Jio</RouterLink>
+        </div>
       </template>
       <template v-else>
         <h1>Discover</h1>
@@ -227,9 +253,10 @@ async function confirmAdd() {
           Filters <span v-if="filterCount" class="filter-count">{{ filterCount }}</span>
         </button>
       </div>
-      <div class="chip-row type-row" role="group" aria-label="Type">
-        <button v-for="t in types" :key="t.key" type="button" class="chip" :aria-pressed="type === t.key" @click="type = t.key">{{ t.label }}</button>
+      <div v-if="!hangoutView" class="chip-row type-row" role="group" aria-label="Type">
+        <button v-for="t in types" :key="t.key" type="button" class="chip" :aria-pressed="type === t.key" @click="setType(t.key)">{{ t.label }}</button>
       </div>
+      <RouterLink v-else to="/discover" class="back-link small fw-bold">Browse all of Discover</RouterLink>
       <section v-if="filtersOpen" id="interest-filters" class="interest-filters" aria-label="More filters">
         <div class="filter-heading"><h2 class="h6 m-0">What are you in the mood for?</h2><button v-if="picked.length" type="button" class="btn btn-ghost btn-sm" @click="picked = []">Reset tags</button></div>
         <div class="chip-row" role="group" aria-label="Interests">
@@ -242,7 +269,7 @@ async function confirmAdd() {
 
     <div class="d-flex justify-content-between align-items-center my-3 gap-2 flex-wrap">
       <p class="m-0 small muted" role="status">
-        {{ results.length }} {{ results.length === 1 ? 'result' : 'results' }}<template v-if="timeWindow"> that fit {{ fmtRange(timeWindow.start, timeWindow.end) }}</template>
+        {{ results.length }} {{ results.length === 1 ? 'result' : 'results' }}<template v-if="timeWindow"> that fit {{ fmtRange(timeWindow.start, timeWindow.end) }}</template><template v-if="nearHome"> near {{ nearHome.label }}, your home area</template>
         <button v-if="filtered" type="button" class="btn btn-ghost btn-sm" @click="clearFilters">Clear filters</button>
       </p>
       <div class="seg" role="group" aria-label="Display" data-tour="discover-view">
@@ -274,14 +301,14 @@ async function confirmAdd() {
         <div class="map-sticky" data-tour="discover-map">
           <MapView :markers="markers" cluster scroll-wheel-zoom height="clamp(380px, 65vh, 720px)" @select="selectFromMap" />
           <div class="legend small">
-            <span><i class="dot teal"></i>Place</span><span><i class="dot plum"></i>Event</span><span><i class="dot mustard"></i>Deal</span><span><i class="dot tomato"></i>Open jio</span>
+            <span><i class="dot teal"></i>Place</span><span><i class="dot plum"></i>Event</span><span><i class="dot mustard"></i>Deal</span><span><i class="dot tomato"></i>Open Jio</span>
           </div>
-          <p v-if="pinsCapped" class="small muted map-cap">Showing {{ pinned.length }} of {{ pinnable.length }} — filter by area or type to narrow it down</p>
+          <p v-if="mapCaption" class="small muted map-cap">{{ mapCaption }}</p>
         </div>
       </div>
     </div>
 
-    <p class="small muted mt-4">Sources: OpenJio sample data (curated for this demo). Listings marked Auto-extracted come from public posts on Singapore Telegram channels (@sgfooddeals, @sgweekend, @sgconcerts, @dateideas, @sgstudentpromos) and confirmgood.com, checked automatically for dates and location; reviewed listings are checked by a person. Map tiles from OneMap, Singapore Land Authority.</p>
+    <p class="small muted mt-4">Sources: OpenJio sample data (curated for this demo). Deals and events come from public posts on the Singapore Telegram channels @sgfooddeals, @sgweekend, @sgconcerts, @dateideas and @sgstudentpromos, and from confirmgood.com. They are read automatically, and each card links to its post. Map tiles from OneMap, Singapore Land Authority.</p>
 
     <AppDialog :open="!!detail" :title="detail?.title || ''" wide @close="detail = null">
       <ListingDetails v-if="detail" :listing="detail" @add="onAdd(detail); detail = null" />
@@ -325,6 +352,9 @@ async function confirmAdd() {
 .filter-toggle { flex: 0 0 auto; }
 .filter-count { display: inline-grid; place-items: center; min-width: 23px; height: 23px; background: var(--tomato-soft); color: var(--tomato-ink); border-radius: 50%; }
 .type-row { margin-top: 12px; }
+.back-link { display: inline-block; margin-top: 10px; }
+.head-row { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px 20px; flex-wrap: wrap; }
+.head-row p { margin-bottom: 0; }
 .interest-filters { border-top: 1px solid var(--line); padding-top: 14px; margin-top: 14px; }
 .filter-heading { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; gap: 10px; }
 .personalise { display: inline-flex; gap: 8px; align-items: center; margin-top: 14px; font-size: 0.9rem; }

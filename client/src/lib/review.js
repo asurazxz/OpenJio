@@ -3,6 +3,19 @@ const DAYS = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN']
 const TIME = /^(?:[01]\d|2[0-3]):[0-5]\d$/
 const text = (value) => typeof value === 'string' && value.trim() ? value.trim() : null
 const fail = (message) => { const error = new Error(message); error.code = 'invalid'; throw error }
+
+// Posts often shout. Auto-extracted titles in all capitals read as title case; mixed case is kept,
+// and so are short acronym titles ("ART SG 2027"), which need two long words to count as shouting.
+const MINOR_WORDS = new Set(['a', 'an', 'and', 'at', 'by', 'for', 'in', 'of', 'on', 'or', 'the', 'to', 'with'])
+export function tidyTitle(value) {
+  const s = String(value || '')
+  if (/[a-z]/.test(s) || (s.match(/[A-Z]{4,}/g) || []).length < 2) return value
+  return value.toLowerCase().replace(/[a-z][a-z']*/g, (word, i) => (i > 0 && MINOR_WORDS.has(word) ? word : word[0].toUpperCase() + word.slice(1)))
+}
+/** "FREE" and "free" both read "Free". */
+export function tidyPrice(value) {
+  return typeof value === 'string' && /^\s*free\s*!?\s*$/i.test(value) ? 'Free' : value
+}
 function number(value, name, min, max, integer = false) {
   if (value == null || value === '') return null
   const result = Number(value)

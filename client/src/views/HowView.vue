@@ -21,31 +21,30 @@ const better = (a, b, higher = true) => a != null && b != null && (higher ? a > 
 <template>
   <div class="page">
     <header class="page-head">
-      <p class="small-caps m-0">Under the hood</p>
       <h1>How OpenJio plans</h1>
-      <p>Less back-and-forth. A time you can make, a plan you can change, and a clear place to meet.</p>
+      <p>A time you can make, a plan you can change, and a clear place to meet.</p>
     </header>
 
     <section aria-labelledby="journey-heading" data-tour="how-overview">
       <h2 id="journey-heading" class="journey-heading">From group chat to going out</h2>
       <div class="steps-grid">
         <article class="card-x story-step">
-          <div class="step-label"><span class="step-number">1</span> Find a time</div>
+          <h3 class="step-label"><span class="step-number">1</span> Find a time</h3>
           <figure class="availability-example" role="img" aria-label="Example group availability">
             <div class="example-grid"><span></span><span>Fri</span><span>Sat</span><span>Sun</span><span>Mei</span><span class="free">✓</span><span class="free best">✓</span><span class="unknown">?</span><span>Arjun</span><span class="busy">—</span><span class="free best">✓</span><span class="free">✓</span><span>Farah</span><span class="free">✓</span><span class="free best">✓</span><span class="busy">—</span></div>
             <figcaption><span class="tag tag-teal">Saturday · 3 of 3 free</span></figcaption>
           </figure>
-          <h3>Your hours. A common window.</h3><p>Mark when you would actually go out. We compare the overlap and suggest the best times.</p><p class="small muted mb-0">No reply stays unknown. Required people must be free.</p>
+          <p>Mark when you would actually go out, and we suggest the best overlap.</p>
         </article>
         <article class="card-x story-step">
-          <div class="step-label"><span class="step-number">2</span> Shape the outing</div>
+          <h3 class="step-label"><span class="step-number">2</span> Shape the outing</h3>
           <figure class="timeline-example" role="img" aria-label="Example outing timeline"><ol><li><time>2:00</time><span class="example-dot"></span><span><strong>A little art</strong><small>Gallery · 60 min</small></span></li><li class="travel"><time></time><span>↓</span><small>20 min travel</small></li><li><time>3:20</time><span class="example-dot meal"></span><span><strong>Kopi and a catch-up</strong><small>Cafe · 60 min</small></span></li></ol><figcaption>Opening hours + travel + your interests</figcaption></figure>
-          <h3>A plan that fits the time.</h3><p>Generate an outing, or pick the stops yourself. Preview changes before you swap one in.</p><p class="small muted mb-0">Unknown hours aren't assumed open. Estimates are labelled.</p>
+          <p>Generate an outing or pick the stops yourself, and preview any swap first.</p>
         </article>
         <article class="card-x story-step">
-          <div class="step-label"><span class="step-number">3</span> Agree and go</div>
+          <h3 class="step-label"><span class="step-number">3</span> Agree and go</h3>
           <figure class="votes-example" role="img" aria-label="Example group voting"><div class="example-stop">Kopi and a catch-up</div><div class="example-votes"><span class="keep">✓ Keep <strong>3</strong></span><span class="swap">↻ Swap <strong>0</strong></span></div><div class="confirmed-example">Host confirms the plan <span aria-hidden="true">→</span></div><figcaption>Running late? Find a stop you can still reach.</figcaption></figure>
-          <h3>Make the call together.</h3><p>Vote on each stop. The host makes the final call; late joiners get a reachable meeting point.</p><p class="small muted mb-0">Scheduled locations, never live tracking. No booking is made.</p>
+          <p>Vote on each stop, the host confirms, and late joiners get a reachable meeting point.</p>
         </article>
       </div>
     </section>
@@ -156,11 +155,11 @@ const better = (a, b, higher = true) => a != null && b != null && (higher ? a > 
     <section class="mt-4 card-x" aria-labelledby="data-h">
       <h2 id="data-h" class="h3">Where listings come from</h2>
       <ul class="mb-2">
-        <li><strong>Sample data:</strong> real public places with approximate hours, and made-up events and deals, so the demo works offline. Marked "Sample data" everywhere.</li>
-        <li><strong>Public posts:</strong> a pipeline reads public Singapore Telegram channels and confirmgood.com, extracts outlet, dates, times and conditions with an AI model (or pattern matching), and leaves anything unclear blank. A reviewer checks every draft before it appears in Discover.</li>
-        <li><strong>Open jios:</strong> public hangouts created by people on OpenJio.</li>
+        <li><strong>Sample data:</strong> real public places with approximate hours, plus made-up events and deals so the demo works offline. Marked "Sample data".</li>
+        <li><strong>Public posts:</strong> deals and events read automatically from public Singapore Telegram channels and confirmgood.com. Each links to its original post, and anything unclear is left blank.</li>
+        <li><strong>Open Jios:</strong> public outings hosted by people on OpenJio.</li>
       </ul>
-      <p class="small muted mb-0">Public APIs used: OneMap (maps, address search, routing), NEA weather forecasts from data.gov.sg, and optional Geoapify place search using OpenStreetMap data. Availability is entered manually using the grid.</p>
+      <p class="small muted mb-0">Public APIs: OneMap, NEA weather via data.gov.sg, and Geoapify place search with OpenStreetMap data.</p>
     </section>
   </div>
 </template>
@@ -169,9 +168,8 @@ const better = (a, b, higher = true) => a != null && b != null && (higher ? a > 
 .journey-heading { margin: 0 0 24px; }
 .steps-grid { display: grid; gap: 18px; }
 .story-step { padding: 22px; min-width: 0; }
-.story-step h3 { font-size: 1.2rem; margin: 20px 0 8px; }
-.story-step > p { font-size: .95rem; }
-.step-label { display: flex; align-items: center; gap: 9px; font-weight: 800; }
+.story-step > p { font-size: .95rem; margin: 20px 0 0; }
+.step-label { display: flex; align-items: center; gap: 9px; font-weight: 800; font-size: 1.2rem; margin: 0; }
 .step-number { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: var(--tomato-soft); color: var(--tomato-ink); }
 figure { margin: 20px 0 0; min-height: 200px; padding: 18px 14px; background: var(--paper-2); border-radius: 14px; }
 figcaption { font-size: .75rem; text-align: center; margin-top: 16px; color: var(--ink-2); }

@@ -107,3 +107,15 @@ test('a pool crowded with well-matched restaurants still leaves room for activit
   assert.equal(r.ok, true)
   assert.ok(r.stops.some((s) => s.listing.kind !== 'meal'))
 })
+
+test('stop times are rounded up to 5 minutes and keep their durations', () => {
+  const travel = () => ({ mins: 17, mode: 'walk' })
+  const r = retime([L[0], L[1]], { ...base, options: { mealWanted: false }, travel })
+  // Slot starts at 12:00; 17 minutes of travel becomes 12:20, not 12:17.
+  assert.equal(r.stops[0].start, sat(12, 20))
+  assert.equal(r.stops[0].end - r.stops[0].start, 90 * MIN)
+  assert.equal(r.stops[1].start, sat(14, 10)) // 13:50 end + 17 min = 14:07, rounded up to 14:10
+  for (const s of r.stops) assert.equal((s.start / MIN) % 5, 0)
+  const g = generateItinerary(base)
+  for (const s of g.stops) assert.equal((s.start / MIN) % 5, 0)
+})

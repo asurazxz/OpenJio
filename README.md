@@ -28,9 +28,8 @@ The API server is what makes the data live: OneMap address lookup and transit ro
 2. On the Plan tab, **Generate plan**, drag a stop card to reorder it, swap a stop (the sheet previews new timings), or **Add a stop** from Discover, a place search, or a typed address. Then **Close voting and confirm**.
 3. In another tab as **Farah**, vote Keep or Swap on the stops; votes appear in Mei's tab without a refresh.
 4. On **On the day**, enter where you are leaving from and when to get the first stop you can still reach.
-5. In **Discover**, browse the map or cards: live OpenStreetMap places, auto-extracted Telegram deals and events (with a link to the original post), sample listings and open jios. Join "Sunday Chinatown wander" from **Open jios**.
-6. As Mei (a reviewer), open **Review listings** from the account menu to correct, publish or reject extracted posts.
-7. **How it works** shows the planning rules and a live comparison against simpler methods.
+5. In **Discover**, browse the map or cards: live OpenStreetMap places, auto-extracted Telegram deals and events (with a link to the original post), sample listings and Open Jios. Join "Sunday Chinatown wander" from **Open Jios**.
+6. **How it works** shows the planning rules and a live comparison against simpler methods.
 
 "Reset demo data" in the account menu restores the starting sample.
 
@@ -42,14 +41,14 @@ The API server is what makes the data live: OneMap address lookup and transit ro
 | `client/src/lib/algo/` | Slot ranking, itinerary generation, deal validity, late-join reachability, Discover ranking, evaluation. Pure functions, unit tested. |
 | `client/src/api/` | Data API. `engine.js` holds all domain rules and permissions; demo mode runs it in the browser with localStorage, hosted mode runs the same engine in the server against Supabase. |
 | `server/` | Express 5 server: OneMap search and routing with a route cache, Geoapify place search, the OpenStreetMap places catalogue, scheduled pipeline runs with auto-publishing, and the trusted engine for hosted (Supabase) mode. |
-| `pipeline/` | Python ingestion: public Telegram channel previews (Telethon for others), confirmgood.com; regex pre-parse and Gemini extraction into drafts for review. |
+| `pipeline/` | Python ingestion: public Telegram channel previews (Telethon for others), confirmgood.com; regex pre-parse and Gemini extraction into drafts. |
 | `supabase/migrations/` | Postgres schema with row level security for the hosted version. |
 | `docs/` | [STATUS.md](docs/STATUS.md) (current status), [decisions.md](docs/decisions.md) (agreed decisions, newest first in authority), [IDEATION-PLAN.md](docs/IDEATION-PLAN.md) (original scope), [DESIGN.md](docs/DESIGN.md) (Hawker Glow design spec and what was built), [SETUP-CREDENTIALS.md](docs/SETUP-CREDENTIALS.md), [EVALUATION.md](docs/EVALUATION.md). |
 
 ## Tests
 
 ```bash
-pnpm --dir client test        # unit tests: algorithms, domain engine, review and publishing
+pnpm --dir client test        # unit tests: algorithms, domain engine and publication rules
 pnpm --dir client e2e         # Playwright journeys (desktop and 375px mobile)
 pnpm --dir client evaluate    # regenerate docs/EVALUATION.md
 pnpm --dir server test        # server: inputs, caches, places catalogue, ingestion, hosted service
@@ -64,7 +63,7 @@ python -m venv pipeline/.venv
 pipeline/.venv/bin/pip install -r pipeline/requirements.txt
 ```
 
-(`pipeline/.venv/Scripts/pip` on Windows.) With `INGEST_ENABLED=true` in `.env`, the API server runs it every 2 hours; `POST /api/ingest/run` starts a run and `/api/ingest/status` shows progress. Every extracted deal or event that has not ended is published to Discover automatically, labelled "Auto-extracted · not reviewed", with missing dates, times or location shown as such and a link to the original post. These listings are view-only; a reviewer's publish or reject replaces them. `pipeline/evaluate.py` measures extraction accuracy against a hand-labelled set in `pipeline/labels/` (still to be labelled).
+(`pipeline/.venv/Scripts/pip` on Windows.) With `INGEST_ENABLED=true` in `.env`, the API server runs it every 2 hours; `POST /api/ingest/run` starts a run and `/api/ingest/status` shows progress. Every extracted deal or event that has not ended is published to Discover automatically, with missing dates, times or location shown as such and a link to the original post. These listings are view-only and there is no manual review step. `pipeline/evaluate.py` measures extraction accuracy against a hand-labelled set in `pipeline/labels/` (still to be labelled).
 
 ## Data sources and credits
 

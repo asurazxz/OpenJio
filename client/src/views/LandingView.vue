@@ -30,7 +30,7 @@ function scrollToHow(event) {
           <RouterLink :to="{ name: 'signin', query: { mode: 'signup', next: '/' } }" class="btn btn-primary">Get started</RouterLink>
           <RouterLink to="/discover" class="btn btn-secondary">Explore the map</RouterLink>
         </div>
-        <a href="#how-jio" class="see-how hero-in" style="--in-delay: 210ms" @click="scrollToHow">See how it works</a>
+        <a href="#how-jio" class="see-how hero-in" style="--in-delay: 210ms" @click="scrollToHow">See how it works <span class="see-how-arrow" aria-hidden="true">↓</span></a>
       </div>
       <LandingMap />
     </section>
@@ -101,7 +101,11 @@ function scrollToHow(event) {
 .landing-footer a { color: var(--ink-2); }
 
 .how-section { margin-top: 56px; scroll-margin-top: calc(var(--header-h) + 16px); }
-.see-how { display: inline-flex; align-items: center; min-height: 44px; margin-top: 4px; color: var(--teal-ink); font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
+/* A quiet scroll cue, clearly secondary to the two buttons. */
+.see-how { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; margin-top: 4px; color: var(--ink-2); font-size: .88rem; font-weight: 600; text-decoration: none; }
+.see-how:hover { color: var(--ink); }
+.see-how-arrow { display: inline-block; animation: nudge 2.4s ease-in-out infinite; }
+@keyframes nudge { 0%, 70%, 100% { transform: translateY(0); } 85% { transform: translateY(3px); } }
 .see-how:focus-visible { outline: 3px solid var(--oj-focus); outline-offset: 3px; }
 
 /* Reveal: hidden only after mount (.reveal-ready), so content never depends on JS. Movement stays at 16px. */
@@ -113,6 +117,7 @@ function scrollToHow(event) {
 @media (prefers-reduced-motion: reduce) {
   [data-reveal] { transition: none; }
   .reveal-ready .hero-in { animation: none; }
+  .see-how-arrow { animation: none; }
 }
 .how-head h2 { margin: 0 0 8px; font-size: clamp(1.6rem, 3.4vw, 2.2rem); }
 .how-head p { margin: 0 0 24px; color: var(--ink-2); max-width: 60ch; }

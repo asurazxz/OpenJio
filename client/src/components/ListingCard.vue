@@ -1,6 +1,6 @@
 <script setup>
 import { computed } from 'vue'
-import { TYPE_LABEL, TYPE_TONE, interestLabel, areaLabel, sourceLine } from '../lib/labels.js'
+import { TYPE_LABEL, TYPE_TONE, interestLabel, areaLabel, sourceLine, spotsText } from '../lib/labels.js'
 import { fmtRange, fmtAge, toMs, fmtDateKey } from '../lib/time.js'
 import CategoryIcon from './brand/CategoryIcon.vue'
 
@@ -24,11 +24,11 @@ const age = computed(() => {
   return t ? fmtAge(t) : null
 })
 const icon = computed(() => (l.value.interests || [])[0] || l.value.type)
-const MISSING_LABEL = { dates: 'Dates not stated', times: 'Times not stated', location: 'Location not stated', source: 'Source not stated' }
-const missingChips = computed(() => (l.value.autoPublished ? l.value.missing || [] : []).map((m) => MISSING_LABEL[m]).filter(Boolean))
+// Cards say only that something is missing; the detail dialog lists which details.
+const hasGaps = computed(() => l.value.autoPublished && ((l.value.missing || []).length > 0 || l.value.locationKnown === false))
 const isOsm = computed(() => l.value.source?.kind === 'osm')
 const sourceText = computed(() => (isOsm.value ? 'OpenStreetMap via Geoapify' : sourceLine(l.value)))
-const spots = computed(() => (l.value.type === 'hangout' && l.value.capacity ? Math.max(0, l.value.capacity - l.value.memberCount) : null))
+const spots = computed(() => (l.value.type === 'hangout' && l.value.capacity ? spotsText(l.value.capacity, l.value.memberCount) : null))
 </script>
 
 <template>
@@ -42,18 +42,20 @@ const spots = computed(() => (l.value.type === 'hangout' && l.value.capacity ? M
       <button type="button" class="title-btn" @click="$emit('open', l)">{{ l.title }}</button>
     </h3>
     <p v-if="l.type === 'deal' && l.dealText" class="deal-text">{{ l.dealText }}<span v-if="l.merchant" class="muted"> at {{ l.merchant }}</span></p>
+    <template v-if="l.type === 'hangout'">
+      <p v-if="when" class="when">{{ when }}</p>
+      <p v-if="spots" class="jio-line tnum" :class="{ full: spots === 'Full' }">{{ spots }}</p>
+      <p v-if="l.hostName" class="jio-line muted">Hosted by {{ l.hostName }}</p>
+    </template>
     <p v-if="!compact" class="summary">{{ l.summary }}</p>
-    <p v-if="when" class="when">{{ when }}</p>
-    <p v-if="l.durationDefault" class="small muted">Typical visit ~{{ l.durationMins }} min (default)</p>
+    <p v-if="when && l.type !== 'hangout'" class="when">{{ when }}</p>
     <div class="meta">
-      <span v-if="l.autoPublished" class="tag auto-tag">Auto-extracted · not reviewed</span>
-      <span v-for="chip in missingChips" :key="chip" class="tag missing-tag">{{ chip }}</span>
-      <span v-if="l.routeReady === false" class="tag">Visit details incomplete</span>
+      <span v-if="hasGaps" class="tag missing-tag">Some details not stated</span>
+      <span v-if="l.routeReady === false && !l.autoPublished" class="tag">Visit details incomplete</span>
       <span v-for="i in (l.interests || []).slice(0, 2)" :key="i" class="tag">{{ interestLabel(i) }}</span>
       <span v-if="l.priceText" class="tag">{{ l.priceText }}</span>
       <span v-if="available === true" class="tag tag-teal">Fits your time</span>
       <span v-else-if="available === false" class="tag">Not at that time</span>
-      <span v-if="spots != null" class="tag" :class="spots ? 'tag-tomato' : ''">{{ spots ? `${spots} spots left` : 'Full' }}</span>
       <span v-if="l.type !== 'hangout' && !l.openingHours && l.type !== 'event'" class="tag">Hours not verified</span>
     </div>
     <div class="foot">
@@ -118,6 +120,10 @@ const spots = computed(() => (l.value.type === 'hangout' && l.value.capacity ? M
 .when { margin: 0; font-size: 0.9rem; font-weight: 600; font-variant-numeric: tabular-nums; }
 .meta { display: flex; flex-wrap: wrap; gap: 6px; }
 .foot { margin-top: auto; padding-top: 6px; display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.jio-line { margin: 0; font-size: 0.9rem; font-weight: 600; }
+.jio-line.muted { font-weight: 500; }
+.jio-line:not(.muted):not(.full) { color: var(--tomato-ink); }
+.foot .btn { flex: none; white-space: nowrap; }
 .source { color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .source.sample {
   font-weight: 700;
@@ -126,7 +132,6 @@ const spots = computed(() => (l.value.type === 'hangout' && l.value.capacity ? M
   padding: 1px 8px;
   border-radius: 999px;
 }
-.auto-tag { background: var(--mustard-soft); color: var(--mustard-ink); font-weight: 700; }
 .missing-tag { background: var(--paper-2); color: var(--ink-2); font-size: .78rem; }
 .compact { padding: 14px; }
 </style>

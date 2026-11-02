@@ -7,11 +7,11 @@ async function signInAs(page, name) {
   await expect(page.getByRole('heading', { level: 1, name: /^(Kopi first|Free later|Jio makan), / })).toBeVisible()
 }
 
-test('Mei finds an open jio, joins it and votes on a stop', async ({ page }) => {
+test('Mei finds an Open Jio, joins it and votes on a stop', async ({ page }) => {
   await signInAs(page, 'Mei Lin')
 
   await page.goto('/discover')
-  await page.getByRole('button', { name: 'Open jios' }).click()
+  await page.getByRole('button', { name: 'Open Jios' }).click()
   await page.getByRole('button', { name: 'Cards view', exact: true }).click()
 
   const card = page.getByRole('listitem').filter({ has: page.getByRole('heading', { name: 'Sunday Chinatown wander' }) })

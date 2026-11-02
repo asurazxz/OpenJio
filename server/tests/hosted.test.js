@@ -58,25 +58,14 @@ test('last-seat concurrent joins commit exactly one user',async()=>{
   assert.ok(['full','conflict'].includes(failure.code));
 });
 
-test('hosted host checks and state changes preserve route-ready publication metadata',async()=>{
+test('hosted host checks and state changes',async()=>{
   const f=fixture();
   const h=await f.call('host','createHangout',{title:'Solo',area:'bugis',mode:'solo',...slot});
   await f.call('host','updateHangout',h.id,{title:'Renamed'});
   assert.equal((await f.call('host','getHangout',h.id)).hangout.title,'Renamed');
   await assert.rejects(()=>f.call('outsider','updateHangout',h.id,{title:'Spoof'}),e=>e.code==='forbidden');
-  f.drafts([{id:'d1',status:'draft',title:'Manual only',area:'bugis',type:'deal',rawPostId:'telegram:fixture:1',source:{kind:'scraped',name:'Fixture',url:'https://example.test/1'}}]);
-  await assert.rejects(()=>f.call('host','publishDraft',{id:'invented',title:'Not from the pipeline',area:'bugis',type:'deal'}),e=>e.code==='not_found');
-  const listing=await f.call('host','publishDraft',{id:'d1',title:'Manual only',area:'bugis',type:'deal',routeReady:false,source:{kind:'scraped',url:'https://spoofed.example'},rawPostId:'spoofed'});
-  assert.equal(listing.source.url,'https://example.test/1');
-  assert.equal(listing.rawPostId,'telegram:fixture:1');
-  assert.equal(listing.lat,null);
-  assert.equal(listing.routeReady,false);
-  assert.equal(listing.reviewStatus,'manual-view-only');
-  await assert.rejects(()=>f.call('host','setPlanStops',h.id,[listing.id]),e=>e.code==='invalid');
-  await assert.rejects(()=>f.call('member','publishDraft',{id:'d2'}),e=>e.code==='forbidden');
-  f.drafts([{id:'d1',status:'retired',retiredReason:'Withdrawn'}]);
-  await f.call('host','listDrafts');
-  assert.ok(!(await f.call(null,'listListings')).some(l=>l.id===listing.id));
+  // The content-review operations no longer exist.
+  for (const op of ['listDrafts','publishDraft','rejectDraft','unpublish']) await assert.rejects(()=>f.call('host',op,{id:'d1'}),e=>e.code==='invalid');
 });
 
 test('hosted plans and accepted routes survive independent service requests',async()=>{

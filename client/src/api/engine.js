@@ -7,7 +7,7 @@ import { fromDateKey, toMs, toIso, sgDateKey, DAY, MIN } from '../lib/time.js'
 import { assessSlot } from '../lib/slot-assessment.js'
 import { customPlace } from '../lib/custom-place.js'
 import { haversineKm } from '../lib/geo.js'
-import { preparePublication } from '../lib/review.js'
+import { preparePublication, tidyTitle, tidyPrice } from '../lib/review.js'
 
 // How long fetched pipeline drafts are reused before asking the server again.
 const AUTO_DRAFTS_TTL_MS = 60 * 1000
@@ -123,7 +123,7 @@ function openJioListings(s) {
         type: 'hangout',
         kind: 'activity',
         title: h.title,
-        summary: h.description || `Open jio hosted by ${host?.name}.`,
+        summary: h.description || `Open Jio hosted by ${host?.name}.`,
         interests: h.interests,
         area: h.startArea.slug,
         address: h.startArea.label,
@@ -235,10 +235,8 @@ async function fetchAutoDrafts() {
 }
 
 // The listing for one auto-publishable draft, or null when it must not be shown.
-// A reviewer's review entry (publish, reject or retire) always wins over the automatic listing.
 function autoListingFor(draft, s, now) {
   if (!draft || draft.autoPublish !== true || draft.status === 'retired') return null
-  if (s.reviews[draft.id]) return null
   // Incomplete drafts stay listed with their gaps. Without a known area there is no location at all.
   const located = draft.locationKnown !== false && AREAS.some((a) => a.slug === draft.area)
   const missing = (Array.isArray(draft.missing) ? draft.missing : []).filter((m) => AUTO_MISSING.includes(m))
@@ -253,7 +251,8 @@ function autoListingFor(draft, s, now) {
   if (listing.type === 'event' && listing.endsAt && Date.parse(listing.endsAt) < now) return null
   if (listing.type === 'deal' && listing.validity?.dateTo && listing.validity.dateTo < sgDateKey(now)) return null
   return {
-    ...listing, reviewStatus: 'auto-extracted', autoPublished: true,
+    ...listing, title: tidyTitle(listing.title), priceText: tidyPrice(listing.priceText),
+    reviewStatus: 'auto-extracted', autoPublished: true,
     locationKnown: located, missing, autoNote: typeof draft.autoNote === 'string' ? draft.autoNote : null,
   }
 }
@@ -270,7 +269,7 @@ function autoListings(drafts, s, now = Date.now()) {
   return out
 }
 
-/** Listings usable as itinerary stops (not open jios, not drafts). */
+/** Listings usable as itinerary stops (not Open Jios, not drafts). */
 function stopCandidates(s) {
   return [...LISTINGS, ...s.published, ...livePlaces(s)].filter((l) => l.status !== 'draft' && l.routeReady !== false)
 }
@@ -503,17 +502,30 @@ async function getHangout(id) {
   }
 }
 
-/** Public preview for an invite link or open jio: no member details beyond names. */
+/** Public preview for an invite link or Open Jio: no member details beyond names. */
 async function previewHangout({ token: t, id }) {
   await wait()
   const s = load()
   const h = t ? s.hangouts.find((x) => x.inviteToken === t) : s.hangouts.find((x) => x.id === id && x.visibility === 'public')
   if (!h) throw new ApiError('not_found', 'This invite link is not valid any more.')
   const members = s.members.filter((m) => m.hangoutId === h.id)
+  // Planned stops, so someone deciding whether to join can see what the outing is. Names, times and
+  // public places only; votes and member details stay private. Times come from the saved schedule,
+  // or are worked out read-only when no member has opened the plan since it changed.
+  await loadPlaces()
+  const planned = s.itineraries[h.id]?.stops || []
+  const listings = planned.map((st) => findPlanListing(s, h, st.listingId))
+  let stops = []
+  if (h.lockedSlot && listings.length && listings.every(Boolean)) {
+    const saved = planned.every((st) => st.scheduledStart != null)
+    const times = saved ? planned.map((st) => ({ start: st.scheduledStart, end: st.scheduledEnd })) : retime(listings, planInput(s, h)).stops
+    stops = listings.map((l, i) => ({ title: l.title, type: l.type, kind: l.kind, start: times[i].start, end: times[i].end, lat: l.lat ?? null, lng: l.lng ?? null }))
+  }
   return {
     id: h.id,
     title: h.title,
     description: h.description,
+    stops,
     visibility: h.visibility,
     stage: h.stage,
     startArea: h.startArea,
@@ -1119,100 +1131,5 @@ async function lateJoin(id, { from, departMs }) {
   const r = joinSuggestions({ stops: plan.stops, from, departMs, travel: travelFn(departMs) })
   return clone(r)
 }
-
-/* ---------------- Content review (R6) ---------------- */
-
-async function listDrafts() {
-  const user = me()
-  if (!user.reviewer) throw new ApiError('forbidden', 'Only reviewers can see drafts.')
-  const s = load()
-  let drafts = []
-  let serverError = null
-  try {
-    drafts = await fetchDrafts()
-    let changed = false
-    // A source post edited after its review sends the draft back to the queue
-    // and withdraws any publication built from the old text.
-    for (const draft of drafts.filter((d) => d.status !== 'retired' && d.sourceEditedAt)) {
-      const review = s.reviews[draft.id]
-      const editedAt = Date.parse(draft.sourceEditedAt)
-      if (!review || !['published', 'rejected'].includes(review.status) || !(review.at < editedAt)) continue
-      s.published = s.published.filter((listing) => listing.id !== `pub-${draft.id}`)
-      s.reviews[draft.id] = { status: 'retired', reason: 'Source post edited; review again', at: Date.now(), previousReview: review }
-      changed = true
-    }
-    for (const draft of drafts.filter((d) => d.status === 'retired')) {
-      const listingId = `pub-${draft.id}`
-      if (s.published.some((listing) => listing.id === listingId)) {
-        s.published = s.published.filter((listing) => listing.id !== listingId)
-        changed = true
-      }
-      if (s.reviews[draft.id]?.status !== 'retired') {
-        s.reviews[draft.id] = {
-          status: 'retired', reason: draft.retiredReason || 'Source withdrawn',
-          at: draft.retiredAt || Date.now(), previousReview: s.reviews[draft.id] || null,
-        }
-        changed = true
-      }
-    }
-    if (changed) persist()
-  } catch {
-    serverError = 'The local server is not running, so new drafts cannot be loaded.'
-  }
-  // Which drafts are currently live on Discover without a reviewer decision.
-  const liveAuto = new Set(autoListings(drafts, s).map((l) => l.id))
-  return {
-    serverError,
-    drafts: drafts.filter((d) => d.status !== 'retired').map((d) => ({ ...d, autoLive: liveAuto.has(`pub-${d.id}`), review: s.reviews[d.id]?.status === 'retired' ? null : s.reviews[d.id] || null })),
-    published: clone(s.published),
-  }
-}
-
-// Fields a reviewer may correct in the review form before publishing.
-const REVIEW_FIELDS = ['title', 'type', 'kind', 'merchant', 'area', 'address', 'category', 'summary', 'priceText', 'dealText', 'validity', 'lat', 'lng', 'durationMins', 'routeReady', 'openingHours', 'conditions', 'exclusions', 'startsAt', 'endsAt']
-
-async function publishDraft(draft) {
-  await wait()
-  const user = me()
-  if (!user.reviewer) throw new ApiError('forbidden', 'Only reviewers can publish.')
-  const s = load()
-  // Publish the pipeline's own draft. The reviewer's corrections apply only to
-  // editable fields; identity, source and raw post always come from the pipeline.
-  if (!draft || typeof draft !== 'object') throw new ApiError('invalid', 'Choose a draft to publish.')
-  let source
-  try {
-    source = (await fetchDrafts()).find((d) => d.id === draft.id && d.status !== 'retired')
-  } catch {
-    throw new ApiError('unavailable', 'Drafts cannot be loaded right now. Try again.')
-  }
-  if (!source) throw new ApiError('not_found', 'This draft is no longer in the review queue.')
-  const corrections = Object.fromEntries(REVIEW_FIELDS.filter((field) => draft[field] !== undefined).map((field) => [field, draft[field]]))
-  const listing = preparePublication({ ...source, ...corrections, id: source.id, source: source.source, rawPostId: source.rawPostId }, AREAS, toIso(Date.now()))
-  s.published = s.published.filter((p) => p.id !== listing.id)
-  s.published.push(listing)
-  s.reviews[draft.id] = { status: 'published', by: user.id, at: Date.now() }
-  persist()
-  return clone(listing)
-}
-
-async function rejectDraft(draftId, reason = '') {
-  await wait()
-  const user = me()
-  if (!user.reviewer) throw new ApiError('forbidden', 'Only reviewers can reject drafts.')
-  const s = load()
-  s.published = s.published.filter((p) => p.id !== `pub-${draftId}`)
-  s.reviews[draftId] = { status: 'rejected', by: user.id, at: Date.now(), reason }
-  persist()
-}
-
-async function unpublish(listingId) {
-  await wait()
-  const user = me()
-  if (!user.reviewer) throw new ApiError('forbidden', 'Only reviewers can unpublish.')
-  const s = load()
-  s.published = s.published.filter((p) => p.id !== listingId)
-  if (listingId.startsWith('pub-')) delete s.reviews[listingId.slice(4)]
-  persist()
-}
-return { AREAS, INTERESTS, resetDemo, SOFT_ISSUES, ApiError, session, currentUser, listUsers, signIn, signOut, updateProfile, listListings, getListing, listMyHangouts, createHangout, updateHangout, getHangout, previewHangout, joinHangout, leaveHangout, setRequired, setStage, renewInvite, saveAvailability, clearAvailability, savePreferences, getSlots, previewSlot, lockSlot, unlockSlot, getPlan, generatePlan, setPlanStops, previewCustomStop, addCustomStop, getAlternatives, previewStops, vote, finalizePlan, reopenVoting, addToShortlist, removeFromShortlist, lateJoin, listDrafts, publishDraft, rejectDraft, unpublish }
+return { AREAS, INTERESTS, resetDemo, SOFT_ISSUES, ApiError, session, currentUser, listUsers, signIn, signOut, updateProfile, listListings, getListing, listMyHangouts, createHangout, updateHangout, getHangout, previewHangout, joinHangout, leaveHangout, setRequired, setStage, renewInvite, saveAvailability, clearAvailability, savePreferences, getSlots, previewSlot, lockSlot, unlockSlot, getPlan, generatePlan, setPlanStops, previewCustomStop, addCustomStop, getAlternatives, previewStops, vote, finalizePlan, reopenVoting, addToShortlist, removeFromShortlist, lateJoin }
 }

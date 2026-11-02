@@ -3,7 +3,7 @@ import { computed } from 'vue'
 import { listMyHangouts, listListings, currentUser } from '../api/index.js'
 import { useLive } from '../composables/useLive.js'
 import { fmtRange, fmtDateKey, toMs } from '../lib/time.js'
-import { STAGE_LABEL, interestLabel } from '../lib/labels.js'
+import { STAGE_LABEL, interestLabel, spotsText } from '../lib/labels.js'
 import UserAvatar from '../components/UserAvatar.vue'
 import EmptyState from '../components/EmptyState.vue'
 import SteamDoodle from '../components/brand/SteamDoodle.vue'
@@ -39,9 +39,13 @@ const openJios = computed(() =>
     .filter((l) => !(hangouts.value || []).some((h) => h.id === l.hangoutId))
     .slice(0, 2),
 )
-// What's happening: soonest upcoming events and still-valid deals, after any open jios.
+// Two columns on desktop only when both "Needs you" and "Coming up" have cards.
+const duo = computed(() => groups.value.action.length > 0 && groups.value.upcoming.length > 0)
+
+// What's happening: soonest upcoming events and still-valid deals, after any Open Jios. Home keeps
+// curated listings and auto-extracted ones with nothing missing; the rest stay in Discover.
 const happening = computed(() => {
-  const all = listings.value || []
+  const all = (listings.value || []).filter((l) => !l.autoPublished || (!(l.missing || []).length && l.locationKnown !== false))
   const now = Date.now()
   const events = all
     .filter((l) => l.type === 'event' && toMs(l.endsAt) > now)
@@ -83,7 +87,7 @@ const greeting = computed(() => {
       </RouterLink>
       <RouterLink to="/discover?type=hangout" class="starter s-find">
         <span class="s-ico" aria-hidden="true"><CategoryIcon name="hangout" :size="30" /></span>
-        <span class="s-title">Find open jios</span>
+        <span class="s-title">Find Open Jios</span>
         <span class="s-sub">Join a public hangout with spots left.</span>
       </RouterLink>
       <RouterLink to="/discover" class="starter s-discover">
@@ -92,11 +96,6 @@ const greeting = computed(() => {
         <span class="s-sub">Places, events and deals near you.</span>
       </RouterLink>
     </section>
-    <nav class="also" aria-label="More ways to plan" data-tour="home-options">
-      <span class="small muted">Going your own way?</span>
-      <RouterLink to="/new?mode=solo" class="btn btn-secondary btn-sm">Plan solo <span aria-hidden="true">↗</span></RouterLink>
-      <RouterLink to="/new?mode=public" class="btn btn-secondary btn-sm">Host an open jio <span aria-hidden="true">↗</span></RouterLink>
-    </nav>
 
     <div v-if="loading" class="py-5 text-center"><span class="spinner-border" aria-label="Loading"></span></div>
     <div v-else-if="error" class="notice danger"><p>{{ error.message }}</p></div>
@@ -111,7 +110,8 @@ const greeting = computed(() => {
         <RouterLink to="/discover" class="btn btn-secondary">Browse Discover</RouterLink>
       </EmptyState>
 
-      <section v-for="(list, key) in groups" v-show="list.length" :key="key" class="group" :aria-labelledby="`g-${key}`">
+      <div class="groups" :class="{ duo }">
+      <section v-for="(list, key) in groups" v-show="list.length" :key="key" class="group" :class="'g-' + key" :aria-labelledby="`g-${key}`">
         <h2 :id="`g-${key}`" class="group-title">{{ { action: 'Needs you', upcoming: 'Coming up', past: 'Past' }[key] }} <span class="count tnum">{{ list.length }}</span></h2>
         <ul class="hangouts">
           <li v-for="h in list" :key="h.id">
@@ -119,7 +119,7 @@ const greeting = computed(() => {
               <div class="hc-top">
                 <span class="tag" :class="{ 'tag-mustard': h.stage === 'collecting', 'tag-tomato': h.stage === 'voting', 'tag-teal': h.stage === 'final' }">{{ STAGE_LABEL[h.stage] }}</span>
                 <span v-if="h.mode === 'solo'" class="tag">Solo</span>
-                <span v-else-if="h.visibility === 'public'" class="tag tag-plum">Open jio</span>
+                <span v-else-if="h.visibility === 'public'" class="tag tag-plum">Open Jio</span>
               </div>
               <h3 class="hc-title">{{ h.title }}</h3>
               <p class="hc-when tnum">{{ when(h) }}</p>
@@ -136,6 +136,7 @@ const greeting = computed(() => {
           </li>
         </ul>
       </section>
+      </div>
 
       <section v-if="openJios.length || happening.length" class="group" aria-labelledby="g-open">
         <div class="d-flex justify-content-between align-items-baseline gap-3 mb-3">
@@ -145,7 +146,7 @@ const greeting = computed(() => {
         <ul class="hangouts">
           <li v-for="o in openJios" :key="o.id">
             <RouterLink :to="`/o/${o.hangoutId}`" class="hcard jio">
-              <div class="hc-top"><span class="tag tag-tomato">Open jio</span><span class="small muted tnum">{{ o.memberCount }} of {{ o.capacity }} going</span></div>
+              <div class="hc-top"><span class="tag tag-tomato">Open Jio</span><span class="small muted tnum">{{ spotsText(o.capacity, o.memberCount) }}</span></div>
               <h3 class="hc-title">{{ o.title }}</h3>
               <p class="hc-when tnum">{{ fmtRange(toMs(o.startsAt), toMs(o.endsAt)) }}</p>
               <p class="hc-where">{{ o.address }}</p>
@@ -171,7 +172,7 @@ const greeting = computed(() => {
 .hello h1 { margin: 0; }
 .hello p { margin: 6px 0 0; color: var(--ink-2); max-width: 52ch; }
 .hello-art { flex: none; margin-bottom: -6px; }
-.starters { display: grid; gap: 12px; margin-bottom: 10px; }
+.starters { display: grid; gap: 12px; margin-bottom: 32px; }
 .starter {
   display: grid;
   grid-template-columns: auto 1fr;
@@ -209,8 +210,6 @@ const greeting = computed(() => {
 .s-discover .s-ico { color: var(--mustard-ink); transform: rotate(-2deg); }
 .s-title { font-family: var(--font-display); font-weight: 900; font-size: 1.25rem; line-height: 1.2; }
 .s-sub { color: var(--ink-2); font-size: 0.92rem; }
-.also { margin: 14px 0 32px; font-size: 0.92rem; font-weight: 600; display: flex; align-items: center; flex-wrap: wrap; gap: 8px 10px; }
-.also .sep { color: var(--line-strong); }
 .group { margin-bottom: 32px; }
 .group-title { font-size: 1.25rem; margin-bottom: 12px; display: inline-flex; align-items: center; gap: 8px; }
 .group-title .count {
@@ -254,17 +253,29 @@ const greeting = computed(() => {
   border-radius: 999px;
   white-space: nowrap;
 }
+/* Below 768px the bottom nav already offers these, so the starters shrink to one row of small tiles
+   and the hangouts that need you come up within the first screen. */
+@media (max-width: 767.98px) {
+  .starters { grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .starter { grid-template-columns: 1fr; grid-template-rows: auto auto; justify-items: center; row-gap: 6px; padding: 12px 6px; text-align: center; }
+  .s-ico { grid-row: auto; width: 40px; height: 40px; border-radius: 12px; }
+  .s-title { font-size: 0.95rem; }
+  .s-sub { display: none; }
+}
 @media (max-width: 575.98px) {
   .hello-art { width: 64px; height: 64px; }
-  .starters { gap: 10px; }
-  .starter { padding: 12px 14px; }
-  .s-ico { width: 44px; height: 44px; }
 }
 @media (min-width: 768px) {
   .starters { grid-template-columns: 1.3fr 1fr 1fr; }
   .starter { grid-template-columns: 1fr; grid-template-rows: auto auto auto; row-gap: 4px; align-items: start; padding: 20px; }
   .s-ico { grid-row: auto; margin-bottom: 10px; }
   .hangouts { grid-template-columns: repeat(2, 1fr); }
+}
+@media (min-width: 992px) {
+  /* Needs you and Coming up sit side by side, each a single stack of cards. */
+  .groups.duo { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 24px; align-items: start; }
+  .groups.duo .g-past { grid-column: 1 / -1; }
+  .groups.duo .g-action .hangouts, .groups.duo .g-upcoming .hangouts { grid-template-columns: 1fr; }
 }
 @media (min-width: 1100px) {
   .hangouts { grid-template-columns: repeat(3, 1fr); }

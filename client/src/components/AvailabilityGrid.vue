@@ -294,13 +294,13 @@ const rowTime = (m) => minText(m)
       </button>
     </div>
 
-    <div v-if="!readonly" class="presets">
+    <div v-if="!readonly" class="presets-wrap"><div class="presets">
       <span class="small muted">Fill {{ presetScope }}:</span>
       <button v-for="p in presets" :key="p.key" type="button" class="chip" @click="fillPreset(p)">
         {{ p.label }} <span class="muted fw-normal">{{ hourText(p.from) }} to {{ hourText(p.to) }}</span>
       </button>
       <button type="button" class="chip" @click="clearShown">Clear</button>
-    </div>
+    </div></div>
 
     <!-- Phone: one day as a list of slots -->
     <div
@@ -441,6 +441,9 @@ const rowTime = (m) => minText(m)
 .presets .chip { font-size: 0.85rem; white-space: nowrap; flex: none; }
 .narrow .presets { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin-right: -18px; padding-right: 18px; }
 .narrow .presets > .small { flex: none; }
+/* Right-edge fade: the row scrolls sideways, so the last chip should look cut off on purpose. */
+.narrow .presets-wrap { position: relative; }
+.narrow .presets-wrap::after { content: ''; position: absolute; top: 0; right: -18px; bottom: 12px; width: 36px; pointer-events: none; background: linear-gradient(to right, transparent, var(--card, #fff) 85%); }
 
 .daypicker { display: flex; gap: 6px; overflow-x: auto; padding: 2px 2px 8px; margin: 0 -2px 6px; scrollbar-width: none; }
 .readonly .daypicker { position: sticky; top: 0; z-index: 3; background: var(--card); }
@@ -485,14 +488,16 @@ const rowTime = (m) => minText(m)
 .lcell .state { display: inline-flex; gap: 6px; align-items: center; font-weight: 700; font-size: 0.85rem; }
 
 /* Desktop grid */
-.grid-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; max-height: 560px; overflow-y: auto; border-radius: 12px; }
+/* No inner scroll: the grid shows at full height and the day names stay under the app header while the
+   page scrolls. A caller that puts the grid in its own scroller (the overlap dialog) sets --grid-top: 0. */
+.grid-wrap { --grid-top: var(--header-h, 0px); border-radius: 12px; }
 .grid {
   display: grid;
-  grid-template-columns: 52px repeat(var(--cols), minmax(48px, 1fr));
-  min-width: calc(52px + var(--cols) * 48px);
+  grid-template-columns: 52px repeat(var(--cols), minmax(36px, 1fr));
+  min-width: calc(52px + var(--cols) * 36px);
   user-select: none;
 }
-.corner, .day-head { position: sticky; top: 0; z-index: 2; background: var(--card); }
+.corner, .day-head { position: sticky; top: var(--grid-top); z-index: 2; background: var(--card); }
 .corner { left: 0; z-index: 3; }
 .day-head { display: flex; flex-direction: column; align-items: center; padding: 4px 2px 8px; line-height: 1.15; border-bottom: 1px solid var(--line); }
 .dh-name { font-weight: 800; font-family: var(--font-display); font-size: 0.92rem; }

@@ -65,7 +65,7 @@ The signature is a plan that works for the group: its stops fit the available ti
 - **Group member / late joiner**: joins by invite, submits availability, votes on stops, finds where to join later.
 - **Solo planner** (decided): plans for themself through the same builder.
 - **Open-jio joiner**: finds a public hangout in Discover and joins it.
-- **Content reviewer**: a team member who reviews and publishes ingested listings.
+- **Content reviewer** (dropped 2 Nov 2026, see decisions D16): extracted listings now publish automatically.
 
 ---
 
@@ -235,7 +235,7 @@ fetch (WordPress JSON / t.me/s preview / Telethon)
   -> validate
   -> geocode outlets via OneMap
   -> draft deals / external_events
-  -> review UI -> published
+  -> auto-published
 ```
 
 **Extraction schema**
@@ -319,7 +319,7 @@ Everything is built fresh on this branch.
 
 As built (`supabase/migrations/20261029000000_init.sql`): places, events and deals share one `listings` table with a `type` column (plus `deal_outlets`), alternatives are computed on request rather than stored, and a `shortlist` table holds group suggestions. Raw availability rows are private to their owner; members see a `hangout_heatmap()` aggregate.
 
-RLS: hangout data visible to members only; public hangouts readable by all signed-in users; only the host changes stage and itinerary; only reviewers publish listings. Write as one initial migration.
+RLS: hangout data visible to members only; public hangouts readable by all signed-in users; only the host changes stage and itinerary; listings come from the ingestion pipeline (the reviewer role was later dropped). Write as one initial migration.
 
 ---
 

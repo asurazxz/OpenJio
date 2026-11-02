@@ -106,3 +106,16 @@ test('optional attendees changing halfway do not hide a required member full win
   })
   assert.deepEqual(r.slots.map(({ start, end, attendees }) => ({ start, end, attendees })), [{ start: sat(10), end: sat(13), attendees: ['a'] }])
 })
+
+test('reasons read as plain language', () => {
+  const members = [
+    { id: 'a', required: true, responded: true },
+    { id: 'b', responded: false },
+    { id: 'c', responded: false },
+  ]
+  const r = rankSlots({ members, availability: { a: [{ start: sat(14), end: sat(20) }] }, ...range })
+  assert.ok(r.slots[0].reasons.includes("2 people haven't replied"), r.slots[0].reasons.join('; '))
+  const one = rankSlots({ members: members.slice(0, 2), availability: { a: [{ start: sat(14), end: sat(20) }] }, ...range })
+  assert.ok(one.slots[0].reasons.includes("1 person hasn't replied"))
+  assert.ok(!one.slots[0].reasons.some((x) => /not responded|^Weekend|^Within|^Free/.test(x)))
+})

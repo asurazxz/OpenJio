@@ -32,6 +32,6 @@ defineProps({
 .tone-pink { --tape: var(--oj-pink); }
 .tone-teal { --tape: var(--oj-teal); }
 .tone-mango { --tape: var(--oj-mango); }
-:global([data-bs-theme='dark']) .washi .tape { opacity: 0.4; }
+[data-bs-theme='dark'] .washi .tape { opacity: 0.4; }
 .label { position: relative; }
 </style>

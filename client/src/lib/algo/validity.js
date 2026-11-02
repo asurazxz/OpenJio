@@ -58,7 +58,7 @@ export function scheduleAt(listing, arriveMs) {
   if (listing.type === 'hangout') {
     const start = Math.max(arriveMs, toMs(listing.startsAt))
     const end = Math.min(toMs(listing.endsAt), start + dur)
-    if (end - start < 30 * MIN) return { ok: false, reason: 'Open jio already over' }
+    if (end - start < 30 * MIN) return { ok: false, reason: 'Open Jio already over' }
     return { ok: true, start, end, waitMins: Math.round((start - arriveMs) / MIN) }
   }
   const day = sgStartOfDay(arriveMs)

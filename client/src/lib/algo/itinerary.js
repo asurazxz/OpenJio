@@ -99,10 +99,13 @@ export function buildPool(candidates, ctx) {
   return [...meals, ...activities, ...spare].map((x) => x.c)
 }
 
+/** Round a time up to the next 5 minutes, so planned stops read 6:20 pm rather than 6:17 pm. */
+const ceil5 = (t) => Math.ceil(t / (5 * MIN)) * 5 * MIN
+
 /** Try appending a listing to a partial plan. Returns the new stop or null. */
 function extend(state, listing, ctx) {
   const leg = ctx.travel(state.pos, listing, state.time)
-  const arrive = state.time + leg.mins * MIN
+  const arrive = ceil5(state.time + leg.mins * MIN)
   const sched = scheduleAt(listing, arrive)
   if (!sched.ok) return null
   if (sched.waitMins > ctx.options.maxWaitMins) return null
@@ -238,7 +241,7 @@ export function retime(listings, input) {
   let pos = ctx.start
   listings.forEach((listing, index) => {
     const leg = ctx.travel(pos, listing, time)
-    const arrive = time + leg.mins * MIN
+    const arrive = ceil5(time + leg.mins * MIN)
     const sched = scheduleAt(listing, arrive)
     const start = sched.start ?? arrive
     const end = sched.end ?? arrive + (listing.durationMins || 60) * MIN

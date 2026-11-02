@@ -67,3 +67,11 @@ test('publication retains non-routing unknown field labels without making those 
   for (const field of ['merchant', 'priceText', 'summary']) assert.ok(listing.unknownFields.includes(field), `${field} stays explicitly unknown`)
   assert.equal(listing.routeReady, true)
 })
+
+test('auto-extracted titles in all capitals read as title case and "FREE" reads "Free"', () => {
+  assert.equal(review.tidyTitle('FAN SESSION WITH LANY AT THE SINGAPORE POP-UP'), 'Fan Session with Lany at the Singapore Pop-Up')
+  assert.equal(review.tidyTitle('1-for-1 Pasta at Pasta Mania'), '1-for-1 Pasta at Pasta Mania')
+  assert.equal(review.tidyTitle('ART SG 2027'), 'ART SG 2027')
+  assert.equal(review.tidyPrice('FREE'), 'Free')
+  assert.equal(review.tidyPrice('Free entry for students'), 'Free entry for students')
+})

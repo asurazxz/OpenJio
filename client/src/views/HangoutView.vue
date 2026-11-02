@@ -54,7 +54,7 @@ function onPointerDown(e) {
 onMounted(() => document.addEventListener('pointerdown', onPointerDown))
 onBeforeUnmount(() => document.removeEventListener('pointerdown', onPointerDown))
 
-// Non-members opening a public hangout get the open jio preview instead of an error.
+// Non-members opening a public hangout get the Open Jio preview instead of an error.
 watch(error, async (e) => {
   if (e?.code !== 'forbidden') return
   try {
@@ -167,7 +167,7 @@ function onTabKey(e, i) {
           <div class="d-flex flex-wrap gap-2 mb-2 hhead-tags">
             <span class="tag" :class="{ 'tag-mustard': h.stage === 'collecting', 'tag-tomato': h.stage === 'voting', 'tag-teal': h.stage === 'final' }">{{ STAGE_LABEL[h.stage] }}</span>
             <span v-if="h.mode === 'solo'" class="tag">Solo plan</span>
-            <span v-if="h.visibility === 'public'" class="tag tag-plum">Open jio</span>
+            <span v-if="h.visibility === 'public'" class="tag tag-plum">Open Jio</span>
           </div>
           <h1 class="m-0">{{ h.title }}</h1>
           <p class="sub tnum">{{ when }}, around {{ h.startArea.label }}</p>
@@ -183,7 +183,7 @@ function onTabKey(e, i) {
           <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 20h4L19 9l-4-4L4 16v4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" /><path d="M13.5 6.5l4 4" fill="none" stroke="currentColor" stroke-width="2" /></svg>
           <span>Edit</span>
         </button>
-        <button v-if="canCancel" type="button" class="btn btn-secondary host-btn host-btn-danger" @click="cancelHangout">
+        <button v-if="canCancel" type="button" class="btn host-btn host-btn-quiet" @click="cancelHangout">
           <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2" /><path d="M9 9l6 6M15 9l-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" /></svg>
           <span>Cancel hangout</span>
         </button>
@@ -374,14 +374,19 @@ function onTabKey(e, i) {
 }
 .host-btn:hover { background: var(--paper-2); }
 .host-btn:focus-visible { outline: 2px solid var(--tomato); outline-offset: 2px; }
-.host-btn-danger { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 40%, transparent); }
-.host-btn-danger:hover { background: var(--danger-soft); border-color: var(--danger); color: var(--danger); }
+/* Cancel is a rare, destructive choice, so it sits beside Edit as plain muted text and only turns red on hover or focus. */
+.host-btn-quiet { border-color: transparent; background: none; color: var(--ink-2); font-weight: 600; }
+.host-btn-quiet:hover, .host-btn-quiet:focus-visible { background: none; border-color: transparent; color: var(--danger); }
+.host-btn-quiet:focus-visible { outline-color: var(--danger); }
 
 /* Compact header on phones */
 @media (max-width: 575.98px) {
   .hhead { position: relative; margin-bottom: 14px; }
   .hhead-tags { margin-bottom: 6px !important; }
   .hhead-main.has-people { padding-right: 176px; }
+  /* On a phone there is no spare margin for the pill to float in, so it stays in the header and
+     scrolls away instead of covering the content below. */
+  .people-rail { position: relative; top: auto; }
   .people-pill { gap: 8px; padding-right: 12px; }
   .people-count { font-size: 0.85rem; }
   .hhead h1 { font-size: 1.5rem; line-height: 1.2; }

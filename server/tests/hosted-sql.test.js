@@ -10,7 +10,7 @@ const container = process.env.OPENJIO_TEST_CONTAINER;
 const q = value => "'" + JSON.stringify(value).replaceAll("'", "''") + "'::jsonb";
 const host='00000000-0000-4000-8000-000000000001', member='00000000-0000-4000-8000-000000000002', outsider='00000000-0000-4000-8000-000000000003';
 
-test('normalized SQL domain: private multiuser journey, role grants, revision conflict and review retirement', {skip:!container}, async t=>{
+test('normalized SQL domain: private multiuser journey, role grants, and revision conflict', {skip:!container}, async t=>{
   assert.match(container,/^openjio-hosted-sql-/,'Only the disposable integration container is allowed');
   async function sql(command,role='service_role') {
     const {stdout}=await run('docker',['exec',container,'psql','-U','postgres','-qAt','-v','ON_ERROR_STOP=1','-c',`set role ${role};${command}`],{maxBuffer:4*1024*1024});
@@ -24,8 +24,7 @@ test('normalized SQL domain: private multiuser journey, role grants, revision co
       catch(error) { error.code=error.stderr.includes('changed')?'conflict':error.code;throw error; }
     },
   };
-  let drafts=[];
-  const service=createHostedService({repository,verifyToken:async token=>({id:token}),readDrafts:async()=>drafts});
+  const service=createHostedService({repository,verifyToken:async token=>({id:token}),readDrafts:async()=>[]});
   const call=(actor,op,...args)=>service.execute({token:actor,operation:op,args});
   const start=sgTime(2026,11,14,14),end=sgTime(2026,11,14,19);
   const h=await call(host,'createHangout',{title:'SQL private',area:'bugis',dateFrom:'2026-11-14',dateTo:'2026-11-14',mealWanted:false});
@@ -63,15 +62,6 @@ test('normalized SQL domain: private multiuser journey, role grants, revision co
   await call(host,'reopenVoting',h.id);
   await call(host,'updateHangout',h.id,{title:'SQL renamed'});
   assert.equal((await call(member,'getHangout',h.id)).hangout.title,'SQL renamed');
-  drafts=[{id:'sql-manual',status:'draft',title:'Unknown details',type:'event',area:'bugis'}];
-  await call(host,'publishDraft',{id:'sql-manual',title:'Unknown details',type:'event',area:'bugis',routeReady:false});
-  const listing=(await call(null,'listListings')).find(l=>l.id==='pub-sql-manual');
-  assert.equal(listing.lat,null);assert.equal(listing.durationMins,null);assert.equal(listing.routeReady,false);
-  await assert.rejects(()=>call(member,'rejectDraft','sql-manual'),e=>e.code==='forbidden');
-  drafts=[{id:'sql-manual',status:'retired',retiredReason:'Withdrawn',retiredAt:Date.now()}];
-  await call(host,'listDrafts');
-  assert.ok(!(await call(null,'listListings')).some(l=>l.id==='pub-sql-manual'));
-  assert.equal(await sql("select status from public.content_reviews where draft_key='sql-manual';"),'retired');
   await t.test('raw snapshots and mutation RPCs are inaccessible to browser roles',async()=>{
     await assert.rejects(()=>sql(`select public.openjio_snapshot('${member}','getHangout',${q([h.id])});`,'authenticated'),/permission denied/);
     await assert.rejects(()=>sql(`select public.openjio_snapshot(null,'listListings','[]');`,'anon'),/permission denied/);
@@ -82,10 +72,6 @@ test('normalized SQL domain: private multiuser journey, role grants, revision co
     const visible=actor=>sql(`set request.jwt.claims='{"sub":"${actor}","role":"authenticated"}';select count(*) from public.profiles where id in('${host}','${member}','${outsider}');`,'authenticated');
     assert.equal(await visible(member),'2');
     assert.equal(await visible(outsider),'1');
-  });
-  await t.test('direct service mutation still checks reviewer authority in SQL',async()=>{
-    const snap=await repository.snapshot({actorId:member,operation:'listDrafts',args:[]});
-    await assert.rejects(()=>repository.commit({actorId:member,operation:'rejectDraft',args:['sql-manual'],revision:snap.revision,state:snap.state}),/reviewer required/);
   });
   await t.test('one final seat is safe under concurrent normalized SQL commits',async()=>{
     const p=await call(host,'createHangout',{title:'SQL public',area:'bugis',visibility:'public',capacity:2,slotStart:start,slotEnd:end});

@@ -87,6 +87,6 @@ The API server can run the content pipeline on a timer and publish complete post
    INGEST_ENABLED=true
    INGEST_INTERVAL_HOURS=2
    ```
-3. Restart the server. The first run starts a minute after start-up; `http://localhost:8787/api/ingest/status` shows progress and the last log lines. `POST /api/ingest/run` starts a run immediately.
+3. Restart the server. The first run starts a minute after start-up; `http://localhost:8787/api/ingest/status` shows progress and the last log lines. `POST /api/ingest/run` starts a run immediately; in hosted mode it also needs an `X-Ingest-Token` header matching `INGEST_RUN_TOKEN` in `.env`.
 
-Only new or edited posts are sent to Gemini. A first run of about 90 posts takes roughly 7 minutes; later runs are short. Complete posts appear in Discover marked "Auto-extracted · not reviewed"; the rest wait in Review with the reason they were held back.
+Only new or edited posts are sent to Gemini. A first run of about 90 posts takes roughly 7 minutes; later runs are short. Every extracted deal or event that has not ended appears in Discover, with any missing details shown and a link to the source post.

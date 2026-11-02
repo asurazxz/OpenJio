@@ -47,13 +47,15 @@ test('host previews an adjusted recommendation and closes the dialog before plan
   await expect(dialog).toBeVisible()
   await expect(dialog.getByRole('region', { name: 'Availability overlap for proposed time' })).toBeVisible()
   await expect(dialog.getByLabel('Date')).toHaveValue(/\d{4}-\d{2}-\d{2}/)
-  await expect(dialog.getByLabel('End time').locator('option', { hasText: '12:00 am (midnight)' })).toHaveCount(1)
+  await expect(dialog.getByLabel('End time').locator('option', { hasText: '12 am (midnight)' })).toHaveCount(1)
   await expect(dialog.getByText('This time can be locked')).toBeVisible()
   await expect(dialog.getByRole('button', { name: 'Lock this time' })).toBeEnabled()
 
   const endSelect = dialog.getByLabel('End time')
   const originalStart = await dialog.getByLabel('Start time').inputValue()
   const originalEnd = await endSelect.inputValue()
+  // Each time is an hour select plus a 5-minute select.
+  await expect(dialog.getByLabel('Start minutes').locator('option')).toHaveCount(12)
 
   const nextDate = new Date(`${firstDate}T00:00:00Z`)
   nextDate.setUTCDate(nextDate.getUTCDate() + 1)
@@ -64,14 +66,14 @@ test('host previews an adjusted recommendation and closes the dialog before plan
   await expect(dialog.getByRole('button', { name: 'Lock this time' })).toBeDisabled()
 
   await dialog.getByLabel('Date').fill(firstDate)
-  await dialog.getByLabel('Start time').selectOption('08:00')
-  await endSelect.selectOption('10:00')
+  await dialog.getByLabel('Start time').selectOption('08')
+  await endSelect.selectOption('10')
   await expect(dialog.getByText('This time needs changes')).toBeVisible()
   await expect(dialog.getByText(/Every required person must be free/i)).toBeVisible()
   await expect(dialog.getByRole('button', { name: 'Lock this time' })).toBeDisabled()
 
-  await dialog.getByLabel('Start time').selectOption('20:00')
-  await endSelect.selectOption('21:00')
+  await dialog.getByLabel('Start time').selectOption('20')
+  await endSelect.selectOption('21')
   await expect(dialog.getByRole('button', { name: 'Lock this time' })).toBeDisabled()
   await expect(dialog.getByText(/at least 2 hours/i)).toBeVisible()
   await expect(dialog.getByRole('button', { name: 'Lock this time' })).toBeDisabled()

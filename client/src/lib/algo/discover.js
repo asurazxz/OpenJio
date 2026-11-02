@@ -1,13 +1,13 @@
 // Discover ranking (R1): interest match, distance, availability at the chosen time and
 // freshness, followed by a diversity pass so one category does not fill the top of the feed.
-// A small timeliness lift puts deals, events and open jios ahead of evergreen places.
+// A small timeliness lift puts deals, events and Open Jios ahead of evergreen places.
 
 import { haversineKm } from '../geo.js'
 import { toMs, DAY } from '../time.js'
 import { availableInWindow } from './validity.js'
 import { memberScore } from './itinerary.js'
 
-// The four base weights sum to 1.0. `timely` adds a small 0.08 lift for deals, events and open jios
+// The four base weights sum to 1.0. `timely` adds a small 0.08 lift for deals, events and Open Jios
 // (0 for places). It is about a third of the interest weight: a strong place match (base score
 // around 0.7 and up) still outranks a weak time-sensitive listing (base around 0.2), but between
 // similar matches the timely listing leads.

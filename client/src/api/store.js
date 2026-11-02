@@ -114,7 +114,6 @@ function seedState() {
     itineraries: {},
     votes: {},
     published: [],
-    reviews: {},
   }
 
   // 1. A group hangout still collecting availability (Jun has not responded).
@@ -154,7 +153,7 @@ function seedState() {
   }
   s.prefs[h1.id] = {}
 
-  // 2. A public open jio with a fixed slot and a generated draft plan.
+  // 2. A public Open Jio with a fixed slot and a generated draft plan.
   const h2 = {
     id: 'h-hawker',
     hostId: 'u-priya',

@@ -17,7 +17,7 @@ test('manual-view-only deals are not treated as planning-verified deals', () => 
   assert.equal(isVerifiedDeal({ type: 'deal', status: 'published', routeReady: false, source: { verifiedAt: '2026-10-29T00:00:00Z' } }), false)
 })
 
-test('deals, events and open jios get the timeliness lift and places do not', () => {
+test('deals, events and Open Jios get the timeliness lift and places do not', () => {
   assert.equal(timelyBoost({ type: 'deal' }), 1)
   assert.equal(timelyBoost({ type: 'event' }), 1)
   assert.equal(timelyBoost({ type: 'hangout' }), 1)

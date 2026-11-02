@@ -3,6 +3,7 @@ import { createSupabaseRepository } from './supabase.js';
 import { createHostedService } from './hosted.js';
 import { createPlanningTravel } from './planning-travel.js';
 import { readFile } from 'node:fs/promises';
+import { timingSafeEqual } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as onemap from './onemap.js';
@@ -224,8 +225,8 @@ app.get('/api/ingest/drafts', async (req, res) => {
   if (sharedMode) {
     const authorization = req.get('Authorization') || '';
     if (!/^Bearer [^\s]+$/.test(authorization)) return res.status(401).json({ error: 'auth' });
-    const result = await hosted.execute({ token: authorization.slice(7), operation: 'listDrafts', args: [] });
-    res.json(result.drafts);
+    await hosted.execute({ token: authorization.slice(7), operation: 'profile', args: [] });
+    res.json(await readDrafts());
     return;
   }
   res.json(await readDrafts());
@@ -236,14 +237,15 @@ app.get('/api/ingest/status', async (req, res) => {
   res.json(await ingestStatus());
 });
 
-// Shared mode: only a signed-in reviewer may trigger a run. The reviewer check
-// reuses listDrafts, which the engine already restricts to reviewers.
+// Shared mode: a run costs scraping and model calls, so only the operator may start one, with the
+// INGEST_RUN_TOKEN from .env in an X-Ingest-Token header. The schedule needs no token.
+function operatorToken(req) {
+  const expected = Buffer.from(process.env.INGEST_RUN_TOKEN || '');
+  const given = Buffer.from(req.get('X-Ingest-Token') || '');
+  return expected.length > 0 && given.length === expected.length && timingSafeEqual(given, expected);
+}
 app.post('/api/ingest/run', async (req, res) => {
-  if (sharedMode) {
-    const authorization = req.get('Authorization') || '';
-    if (!/^Bearer [^\s]+$/.test(authorization)) return res.status(401).json({ error: 'auth', message: 'Please sign in to run ingestion.' });
-    await hosted.execute({ token: authorization.slice(7), operation: 'listDrafts', args: [] });
-  }
+  if (sharedMode && !operatorToken(req)) return res.status(403).json({ error: 'forbidden', message: 'Only the operator can start an ingest run.' });
   if (!ingest.runNow()) return res.status(409).json({ error: 'busy', message: 'An ingest run is already in progress.' });
   res.status(202).json(await ingestStatus());
 });

@@ -3,7 +3,7 @@ import { AREAS, INTERESTS } from '../data/seed-listings.js'
 export class ApiError extends Error {
   constructor(code, message) { super(message); this.code = code }
 }
-const OPERATIONS = ['listUsers','updateProfile','listListings','getListing','listMyHangouts','createHangout','updateHangout','getHangout','previewHangout','joinHangout','leaveHangout','setRequired','setStage','renewInvite','saveAvailability','clearAvailability','savePreferences','getSlots','previewSlot','lockSlot','unlockSlot','getPlan','generatePlan','setPlanStops','previewCustomStop','addCustomStop','getAlternatives','previewStops','vote','finalizePlan','reopenVoting','addToShortlist','removeFromShortlist','lateJoin','listDrafts','publishDraft','rejectDraft','unpublish']
+const OPERATIONS = ['listUsers','updateProfile','listListings','getListing','listMyHangouts','createHangout','updateHangout','getHangout','previewHangout','joinHangout','leaveHangout','setRequired','setStage','renewInvite','saveAvailability','clearAvailability','savePreferences','getSlots','previewSlot','lockSlot','unlockSlot','getPlan','generatePlan','setPlanStops','previewCustomStop','addCustomStop','getAlternatives','previewStops','vote','finalizePlan','reopenVoting','addToShortlist','removeFromShortlist','lateJoin']
 
 export function createHostedAdapter({ auth, request, reactive = v => v, onRevision = () => {} }) {
   const session = reactive({ userId: null, error: null })

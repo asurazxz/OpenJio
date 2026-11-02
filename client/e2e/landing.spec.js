@@ -7,7 +7,7 @@ test('public landing introduces OpenJio with a usable map and clear account entr
   // Signed-out visitors get the public links only; account pages are not linked.
   // The header links show from the tablet breakpoint up; phones rely on the hero links.
   const nav = page.locator('.app-header .main-nav')
-  await expect(nav.locator('a')).toHaveText(['Discover', 'Open jios', 'How it works'])
+  await expect(nav.locator('a')).toHaveText(['Discover', 'Open Jios', 'How it works'])
   if (page.viewportSize().width >= 768) await expect(nav).toBeVisible()
   else await expect(nav).toBeHidden()
   const start = page.locator('.landing-hero').getByRole('link', { name: 'Get started', exact: true })

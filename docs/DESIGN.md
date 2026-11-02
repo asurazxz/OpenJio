@@ -26,7 +26,6 @@ OpenJio helps students and young adults in Singapore turn casual group-chat invi
 6. **Solo mode:** Plan a free afternoon for one person.
 7. **Open Jios:** Discover and join public hangouts with limited spots.
 8. **Discover:** Browse places, events, and deals in a feed or map, ranked by interests, distance, and scheduling fit.
-9. **Reviewer:** A moderator reviews auto-extracted events and deals before publishing.
 
 **Audience and constraints:** Phone-first, often arriving from WhatsApp or Telegram. Must work from **375px** phones to desktop, in light/dark themes, with complete keyboard access, screen-reader labels, visible focus, and robust contrast.
 
@@ -124,9 +123,9 @@ Use embellishment on greetings, marketing/invite surfaces, empty states, and suc
 
 ### Desktop (≥992px)
 
-- Constrain reading content widths but allow broad work surfaces for scheduler, itinerary+map, and reviewer.
-- Use sidebar or top-level navigation; two-column itinerary/map; seven-day availability grid; three-pane reviewer workspace where feasible.
-- Prefer a **content max-width around 1200–1320px**, with appropriate exceptions for maps/reviewer.
+- Constrain reading content widths but allow broad work surfaces for scheduler and itinerary+map.
+- Use sidebar or top-level navigation; two-column itinerary/map; seven-day availability grid.
+- Prefer a **content max-width around 1200–1320px**, with appropriate exceptions for maps.
 
 ### Light/dark mode
 
@@ -144,7 +143,7 @@ Use Bootstrap 5 `data-bs-theme="light"` / `"dark"`, with OpenJio tokens overridi
 1. Header and greeting.
 2. Main Create/Find actions, chunky orange/teal illustrated tiles.
 3. **Your Jios**: next planned jio and pending invites; show next action such as “Mark availability” or “Vote on 2 stops”.
-4. **What's happening?** nearby open jios, events, food, and activity cards with strong photography.
+4. **What's happening?** nearby Open Jios, events, food, and activity cards with strong photography.
 5. Nearby places/deals; honest source/freshness labels.
 
 **Empty state:** Friendly illustration and actionable text, “No jios yet. Start one with your friends.”
@@ -266,7 +265,7 @@ Use Bootstrap 5 `data-bs-theme="light"` / `"dark"`, with OpenJio tokens overridi
 
 **Motion:** Recommendation card slides in 8px/fades over 240ms after actual result. No animated live dot unless real position updates exist.
 
-### 4.11 Moderator review workspace
+### 4.11 Moderator review workspace (removed, see D16)
 
 **Aesthetic:** Functional Hawker Glow variant. Cream/charcoal surfaces remain, but illustrations and sticker flourishes become rare.
 
@@ -306,7 +305,7 @@ Assets should be **local SVG or CSS**, not raster screenshots of UI. The agent s
 
 1. **Feedback immediately:** A tap changes the control state without waiting for the animation.
 2. **Celebrate decisions, not every hover:** The few strong moments are stamping a vote, creating an invite, and finalising a plan.
-3. **Quiet during analysis:** No ongoing decoration in grid, ranked slots, map comparisons, or reviewer queue.
+3. **Quiet during analysis:** No ongoing decoration in grid, ranked slots or map comparisons.
 4. **No false certainty:** Animation must not make estimated routes look live or unverified data look approved.
 5. **Accessibility is functional:** Reduced motion, focus, touch, and screen readers are part of the animation design, not afterthoughts.
 
@@ -349,7 +348,6 @@ Assets should be **local SVG or CSS**, not raster screenshots of UI. The agent s
 - **Server-confirmed vote:** Animate selected vote once; update displayed counts from the authoritative response or reconcile optimistic state.
 - **Server error:** Revert optimistic state where needed; show useful error message, and never celebrate.
 - **Time slot ranking updated:** Keep interaction stable; do not shuffle cards under a user's finger or focus unexpectedly.
-- **Review approval:** Animate row removal only after success.
 
 ### 6.5 Reduced motion
 
@@ -523,7 +521,7 @@ src/
 - Every icon-only button gets a meaningful accessible name.
 - Keyboard navigation to all app actions, grid cells/ranges, voting, host reorder, and map equivalent list. Esc closes sheets; closing returns focus to opener.
 - For bottom sheets, contain keyboard focus while open and restore it on close.
-- Live-region updates: announce confirmed vote, locked time, saved availability, completed swap, review result, and late-join recommendation. Avoid speech flooding during drag painting.
+- Live-region updates: announce confirmed vote, locked time, saved availability, completed swap, and late-join recommendation. Avoid speech flooding during drag painting.
 - Do not use colour as the sole cue for Free/Unknown/Busy, Keep/Swap, source confidence, warnings or sample data.
 - Respect `prefers-reduced-motion` and system high-contrast preferences where supported.
 
@@ -542,7 +540,6 @@ src/
 - Unknown opening hours: “Hours not verified”, not “Open now”.
 - Deals: source name/link, validity dates, and most recent check timestamp; never invent merchant endorsement.
 - Sample/demo content: persistent label “Sample data”.
-- Moderator review: “Auto-extracted” distinct from “Approved/Published”.
 - Group availability: distinguish “Unavailable” from “No response”.
 - Public jio capacity: show exact spots and current state, without flashing urgency or unverified live counts.
 
@@ -577,7 +574,6 @@ src/
 
 - Public Open Jio listing/detail and capacity states.
 - Discover feed/map, source and freshness badges.
-- Reviewer queue, evidence, moderation decisions and audit status.
 - Optional decorative home steam and selected marker motion once core UX is stable.
 
 ---
@@ -599,7 +595,7 @@ src/
 - [ ] Vote, swap, reordering, and confirmation states reconcile with real responses.
 - [ ] Itinerary and late-join results never imply unverified route certainty.
 - [ ] Invite links opened from chat preserve the right jio context.
-- [ ] Open Jio capacity, Discover freshness, and reviewer states are visibly truthful.
+- [ ] Open Jio capacity, and Discover freshness are visibly truthful.
 
 ### Motion and accessibility
 - [ ] Vote feedback is a one-time stamp, no endless motion.
@@ -641,21 +637,21 @@ This section records how the spec landed in `client/` and every place the build 
 | Create flow (4.2) | `NewHangoutView.vue`: four steps (Plan, When, Where, Check) with vibe shortcuts, then the Jio Slip with Copy link, Share (when the browser supports it) and Go to jio |
 | Invite landing (4.3) | `JoinView.vue`: Jio Slip with OPEN JIO or INVITED tape, status (time pending, voting, confirmed), spots left; bottom nav hidden on these routes |
 | Late join (4.10) | `GoPanel.vue`: earliest reachable stop, arrival, buffer, backup stop, "View directions", "Share my ETA" (only on tap) |
-| Navigation (3) | `BottomNav.vue`: Home, Discover, Create (raised orange), Open jios, Me. Header links on wider screens |
+| Navigation (3) | `BottomNav.vue`: Home, Discover, Create (raised orange), Open Jios, Me. Header links on wider screens |
 
 ### Departures from the spec
 
 1. **Muted text colour.** Light `--oj-muted` is `#636975`, not `#6B7280`. The spec value measured 4.05 to 4.24:1 on the tinted fills (tags, soft tiles), below AA. Dark mode uses the spec value.
 2. **Control borders.** Added `--oj-control-border` (`#A08A76` light, `#8A837D` dark) for inputs and secondary buttons so their edges reach 3:1. The spec border `#E9DED3` is kept for cards.
 3. **Bright fills use dark text** (`--oj-on-fill`), following the contrast rule in 2.3. Measured: 6.2:1 on orange, 7.1:1 on teal, 5.0:1 on pink.
-4. **"Plans" destination** in the bottom nav became **Open jios**: Home already lists your plans, and the spec says not to add a redundant page.
+4. **"Plans" destination** in the bottom nav became **Open Jios**: Home already lists your plans, and the spec says not to add a redundant page.
 5. **No photography.** The sample data has no licensed photos, so cards use a tinted tile with an outlined category icon instead. Real photos can replace the tile later without layout changes.
 6. **Bootstrap Offcanvas** was not used for the swap sheet. The native `<dialog>` already traps focus, closes on Escape, shows a backdrop and returns focus to the opener, without adding Bootstrap's JavaScript.
 7. **Presets** apply to the shown day on phones and to every day on wider screens. The label says which ("Fill Sat 14 Nov" or "Fill every day").
 8. **Touch painting** is off by default. A "Drag to paint" toggle turns it on, so ordinary swipes keep scrolling the page.
 9. **Sentence case** for headings and buttons, as in the spec's copy examples, rather than Title Case.
 10. **Marker clustering** on the Discover map is not built yet.
-11. **The reviewer workspace** keeps its earlier layout with the new tokens. The three-pane layout in 4.11 is still to do.
+11. **The reviewer workspace** was removed on 2 November 2026 (D16); 4.11 is kept below only as history.
 
 ### Checks run
 
@@ -668,9 +664,9 @@ This section records how the spec landed in `client/` and every place the build 
 
 Recorded as decisions D26–D39 in [decisions.md](./decisions.md); the visible changes:
 
-- **Landing:** map-led hero plus "How a jio comes together" with three looping example animations (`client/src/components/landing/`), scroll reveals (`client/src/composables/useReveal.js`) and a closing call to action. Signed-out visitors get one header with Discover, Open jios and How it works.
+- **Landing:** map-led hero plus "How a jio comes together" with three looping example animations (`client/src/components/landing/`), scroll reveals (`client/src/composables/useReveal.js`) and a closing call to action. Signed-out visitors get one header with Discover, Open Jios and How it works.
 - **Hangout page:** phase pills merged into the stepped tabs; People moved to a sticky "N going" pill with a popover; **Edit** and **Cancel hangout** as equal buttons; one in-app confirmation dialog (`ConfirmHost.vue`) replaces every browser pop-up.
 - **Time:** reply strip; 12-hour time selects with automatic attendance checks.
 - **Plan:** dragged card follows the pointer while numbers and legs stay fixed; warning chips; floating Add a stop / Regenerate toolbar.
 - **On the day:** preview of what unlocks before confirmation.
-- **Discover:** marker clustering (Leaflet.markercluster, orange bubbles with a teal halo), a 30-pin cap, Cards paging, "Auto-extracted · not reviewed" and "… not stated" chips, OpenStreetMap source lines.
+- **Discover:** marker clustering (Leaflet.markercluster, orange bubbles with a teal halo), a 30-pin cap, Cards paging, "Auto-extracted" and "… not stated" chips, OpenStreetMap source lines.

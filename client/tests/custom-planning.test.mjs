@@ -8,7 +8,7 @@ const start = sgTime(2026, 11, 14, 14), end = sgTime(2026, 11, 14, 19)
 const cafe = { name: 'Test dessert café', address: '12 Test Street, Singapore', lat: 1.298, lng: 103.851, durationMins: 60, kind: 'activity', providerId: 'geo-example', provider: 'geoapify', openingHoursText: 'Mo-Su 10:00-22:00' }
 function fixture() {
   let actor = 'host', serial = 0
-  const state = { version: 1, users: ['host', 'member', 'outsider'].map(id => ({ id, name: id, interests: {} })), hangouts: [], members: [], availability: {}, prefs: {}, itineraries: {}, votes: {}, published: [], reviews: {} }
+  const state = { version: 1, users: ['host', 'member', 'outsider'].map(id => ({ id, name: id, interests: {} })), hangouts: [], members: [], availability: {}, prefs: {}, itineraries: {}, votes: {}, published: [] }
   const make = () => createApiEngine({ load: () => state, persist() {}, uid: prefix => `${prefix}-${++serial}`, token: () => `invite-${++serial}`, getSessionUserId: () => actor, setSessionUserId: id => { actor = id }, resetDemo() {}, travelFn: () => estimateTravel, prefetchLegs: async () => ({}), fetchDrafts: async () => [], latency: 0 })
   const api = make()
   return { api, state, make, as: id => { actor = id; api.session.userId = id } }

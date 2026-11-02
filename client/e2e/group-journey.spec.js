@@ -46,7 +46,7 @@ test('Mei creates a group plan, locks a time, generates and confirms a plan', as
   await expect(page.getByText(/Meet them at|No stop works from there/)).toBeVisible()
 })
 
-for (const [mode, submit, title] of [['solo', 'Create plan', 'E2E solo afternoon'], ['public', 'Create open jio', 'E2E open makan']]) {
+for (const [mode, submit, title] of [['solo', 'Create plan', 'E2E solo afternoon'], ['public', 'Create Open Jio', 'E2E open makan']]) {
   test(`creating a ${mode} plan opens it directly, without an unsaved-changes prompt`, async ({ page }) => {
     await signInAs(page, 'Priya Raman')
     await page.goto(`/new?mode=${mode}`)

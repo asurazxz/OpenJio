@@ -1,12 +1,14 @@
 <script setup>
-// Invite link (/j/:token) and open jio (/o/:id) landing page. Shows only a safe preview.
+// Invite link (/j/:token) and Open Jio (/o/:id) landing page. Shows only a safe preview.
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { previewHangout, joinHangout, session } from '../api/index.js'
-import { fmtRange, fmtDateKey } from '../lib/time.js'
-import { interestLabel } from '../lib/labels.js'
+import { fmtRange, fmtTime, fmtDateKey } from '../lib/time.js'
+import { interestLabel, spotsText } from '../lib/labels.js'
 import { toast, toastError } from '../lib/toast.js'
 import EmptyState from '../components/EmptyState.vue'
+import UserAvatar from '../components/UserAvatar.vue'
+import MapView from '../components/MapView.vue'
 import JioSlip from '../components/brand/JioSlip.vue'
 import SteamDoodle from '../components/brand/SteamDoodle.vue'
 
@@ -38,7 +40,27 @@ const status = computed(() => {
   if (p.value.stage === 'final') return { tone: 'tag-teal', text: 'Plan confirmed' }
   return null
 })
-const spotsLeft = computed(() => (p.value?.capacity ? Math.max(0, p.value.capacity - p.value.memberCount) : null))
+const spots = computed(() => (p.value?.capacity ? spotsText(p.value.capacity, p.value.memberCount) : null))
+// The preview has first names only, so avatars get a colour from the name. Host first.
+const COLORS = ['tomato', 'teal', 'mustard', 'plum', 'sky']
+const going = computed(() => {
+  if (!p.value) return []
+  const hostFirst = (p.value.host || '').split(' ')[0]
+  const rest = [...(p.value.memberNames || [])]
+  const at = rest.indexOf(hostFirst)
+  if (at !== -1) rest.splice(at, 1)
+  return [hostFirst, ...rest].filter(Boolean).map((name, i) => ({
+    name,
+    host: i === 0,
+    user: { name, color: COLORS[[...name].reduce((n, c) => n + c.charCodeAt(0), 0) % COLORS.length] },
+  }))
+})
+const stops = computed(() => p.value?.stops || [])
+const stopMarkers = computed(() =>
+  stops.value
+    .map((st, i) => ({ id: i, lat: st.lat, lng: st.lng, label: String(i + 1), title: st.title, tone: st.kind === 'meal' ? 'mustard' : 'tomato' }))
+    .filter((m) => Number.isFinite(m.lat) && Number.isFinite(m.lng)),
+)
 const full = computed(() => p.value && p.value.memberCount >= (p.value.capacity || 8))
 const over = computed(() => p.value && ['ended', 'cancelled'].includes(p.value.stage))
 
@@ -63,11 +85,11 @@ async function join() {
 <template>
   <div class="page page-narrow join-page">
     <EmptyState v-if="error" title="This link does not work" :body="error.message" tone="tomato">
-      <RouterLink to="/discover?type=hangout" class="btn btn-secondary">Browse open jios</RouterLink>
+      <RouterLink to="/discover?type=hangout" class="btn btn-secondary">Browse Open Jios</RouterLink>
     </EmptyState>
     <div v-else-if="!p" class="py-5 text-center"><span class="spinner-border" aria-label="Loading"></span></div>
     <template v-else>
-      <p class="lead-in">{{ p.host }} {{ p.visibility === 'public' ? 'is hosting an open jio' : 'is jio-ing you' }}. You in?</p>
+      <p class="lead-in">{{ p.host }} {{ p.visibility === 'public' ? 'is hosting an Open Jio' : 'is jio-ing you' }}. You in?</p>
       <JioSlip :label="p.visibility === 'public' ? 'OPEN JIO' : 'INVITED'" :tone="p.visibility === 'public' ? 'teal' : 'orange'" rise>
         <div class="t-head">
           <div class="min-w-0">
@@ -79,14 +101,33 @@ async function join() {
         <p v-if="p.description" class="t-desc">{{ p.description }}</p>
         <div class="d-flex flex-wrap gap-2 mb-3">
           <span v-if="status" class="tag" :class="status.tone">{{ status.text }}</span>
-          <span v-if="spotsLeft != null" class="tag tnum" :class="spotsLeft ? 'tag-teal' : ''">{{ spotsLeft ? `${spotsLeft} of ${p.capacity} spots left` : 'Full' }}</span>
+          <span v-if="spots" class="tag tnum" :class="spots !== 'Full' ? 'tag-teal' : ''">{{ spots }}</span>
         </div>
         <dl class="t-facts">
           <div><dt>When</dt><dd class="tnum">{{ when }}</dd></div>
           <div><dt>Start</dt><dd>Around {{ p.startArea.label }}</dd></div>
-          <div><dt>Going</dt><dd>{{ p.memberNames.join(', ') }}</dd></div>
           <div v-if="p.interests?.length"><dt>Vibe</dt><dd>{{ p.interests.map(interestLabel).join(', ') }}</dd></div>
+          <div>
+            <dt>Going</dt>
+            <dd>
+              <ul class="going" aria-label="Who is going">
+                <li v-for="g in going" :key="g.name"><UserAvatar :user="g.user" :size="28" /><span>{{ g.name }}<span v-if="g.host" class="host-note"> (host)</span></span></li>
+              </ul>
+            </dd>
+          </div>
         </dl>
+        <section v-if="stops.length" class="t-plan" aria-labelledby="plan-h">
+          <h2 id="plan-h" class="t-plan-title">The plan so far</h2>
+          <div class="t-plan-body">
+            <ol class="stops">
+              <li v-for="(st, i) in stops" :key="i">
+                <span class="stop-n tnum" aria-hidden="true">{{ i + 1 }}</span>
+                <span class="stop-t"><span class="tnum">{{ fmtTime(st.start) }} to {{ fmtTime(st.end) }}</span> {{ st.title }}</span>
+              </li>
+            </ol>
+            <MapView v-if="stopMarkers.length" class="t-map" :markers="stopMarkers" height="170px" />
+          </div>
+        </section>
         <template #stub>
           <div class="t-actions">
             <RouterLink v-if="p.alreadyMember" :to="`/h/${p.id}`" class="btn btn-primary">Open the plan</RouterLink>
@@ -120,5 +161,18 @@ async function join() {
 .t-facts div { display: grid; grid-template-columns: 64px 1fr; gap: 12px; }
 dt { font-size: 0.85rem; font-weight: 700; color: var(--ink-2); padding-top: 1px; }
 dd { margin: 0; font-weight: 600; }
+.going { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px 14px; }
+.going li { display: inline-flex; align-items: center; gap: 6px; }
+.host-note { color: var(--ink-2); font-weight: 500; font-size: 0.85rem; }
+.t-plan { margin-top: 16px; padding-top: 14px; border-top: 1px dashed var(--line-strong); }
+.t-plan-title { font-size: 1rem; margin: 0 0 10px; }
+.t-plan-body { display: grid; gap: 12px; }
+.stops { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.stops li { display: flex; gap: 10px; align-items: baseline; }
+.stop-n { flex: none; display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--tomato-soft); color: var(--tomato-ink); font-size: 0.8rem; font-weight: 700; }
+.stop-t { min-width: 0; overflow-wrap: anywhere; }
+.stop-t .tnum { color: var(--ink-2); font-size: 0.9rem; margin-right: 6px; }
+.t-map { border-radius: 14px; overflow: hidden; }
+@media (min-width: 640px) { .t-plan-body { grid-template-columns: 1fr 1fr; align-items: start; } }
 .t-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 </style>

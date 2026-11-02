@@ -30,11 +30,10 @@ let appWasInert = false
 // Routes are part of the tour: Next and Back keep the walkthrough open across pages.
 const steps = [
   { path: '/', target: 'home-create', title: 'Start with your next outing', text: 'Create a jio here to plan with friends. Pick possible days, invite the group, then find a time that works.' },
-  { path: '/', target: 'home-options', title: 'Solo and public plans are here too', text: 'Plan solo when you already know your free time. Host an open jio when you want others to discover and join it.' },
   { path: '/discover', target: 'discover-filters', title: 'Narrow down the ideas', text: 'Search places, events and deals by name or area. Open Filters to choose interests and find something your group will enjoy.' },
   { path: '/discover', target: 'discover-view', title: 'Explore or compare', text: 'Map view shows where ideas are. Switch to Cards when you want to compare the details side by side.' },
   { path: '/discover', target: 'discover-map', title: 'A pin is an idea you can open', text: 'Select a pin for the address, opening hours, conditions and source. Add an idea to a jio’s shortlist when it suits you.' },
-  { path: '/discover?type=hangout', target: 'discover-intro', title: 'Meet people through Open jios', text: 'Open jios are public hangouts with spots left. Browse their cards or map pins, open one to check the time and details, then join if it suits you.' },
+  { path: '/discover?type=hangout', target: 'discover-intro', title: 'Meet people through Open Jios', text: 'Open Jios are public hangouts with spots left. Browse the cards, open one to check the time and details, then join if it suits you.' },
   { path: '/how', target: 'how-overview', title: 'The whole journey at a glance', text: 'How it works explains finding a common time, shaping an outing and agreeing on the plan. The algorithm comparison below is optional.' },
   { path: '/how', target: 'nav-create', title: 'Create a jio from any page', text: 'Ready to host? Use Create a jio in the desktop header, or Create in the bottom navigation on your phone.' },
 ]
@@ -248,7 +247,7 @@ onBeforeUnmount(() => {
 <template>
   <AppDialog :open="welcome" title="A quick look around" @close="dismissWelcome">
     <p class="tour-intro">A time that works. A plan worth going out for.</p>
-    <p class="muted">Take a short tour through Home, Discover, Open jios, How it works and where to create a jio. You can skip it now and open <strong>Quick tour</strong> from the header any time.</p>
+    <p class="muted">Take a short tour through Home, Discover, Open Jios, How it works and where to create a jio. You can skip it now and open <strong>Quick tour</strong> from the header any time.</p>
     <div class="tour-welcome-actions"><button type="button" class="btn btn-ghost" @click="dismissWelcome">Skip tour</button><button type="button" class="btn btn-primary" @click="start">Show me around</button></div>
   </AppDialog>
   <Teleport to="body">

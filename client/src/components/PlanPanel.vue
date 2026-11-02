@@ -300,7 +300,8 @@ const voteSummary = computed(() => {
         <div class="col-lg-7 plan-col" :class="{ 'has-bar': canEdit }">
           <div class="plan-head">
             <WashiHeading tag="h3" tone="orange" class="m-0">The plan</WashiHeading>
-            <span class="phase tnum" :class="'ph-' + phase.key">{{ phase.label }}</span>
+            <!-- Once confirmed or closed the header chip already says so (and the banner above), so no third copy here. -->
+            <span v-if="phase.key !== 'final' && phase.key !== 'closed'" class="phase tnum" :class="'ph-' + phase.key">{{ phase.label }}</span>
           </div>
           <div v-if="planIssues.length" class="issue-chips mb-3">
             <span v-for="i in planIssues" :key="i.type" class="issue-chip" :class="isSoft(i) ? 'soft' : 'hard'">

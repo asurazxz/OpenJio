@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { createHangout, currentUser, AREAS } from '../api/index.js'
 import InterestPicker from '../components/InterestPicker.vue'
@@ -10,6 +10,8 @@ import { fmtDateKey } from '../lib/time.js'
 import { toast } from '../lib/toast.js'
 import { sgDateKey, sgParts, fromDateKey, DAY, MIN } from '../lib/time.js'
 import { toastError } from '../lib/toast.js'
+import { searchPlaces } from '../lib/places.js'
+import { geocode } from '../lib/travel.js'
 import { useUnsavedChanges } from '../composables/useUnsavedChanges.js'
 
 const route = useRoute()
@@ -19,7 +21,7 @@ const user = currentUser()
 const modes = [
   { key: 'group', label: 'With friends', hint: 'Everyone marks when they are free, then you pick the best time.' },
   { key: 'solo', label: 'Just me', hint: 'Choose your free time and get a plan from your own interests.' },
-  { key: 'public', label: 'Open jio', hint: 'Set the time yourself. Anyone can find it in Discover and join.' },
+  { key: 'public', label: 'Open Jio', hint: 'Set the time yourself. Anyone can find it in Discover and join.' },
 ]
 // Vibe shortcuts fill in interests; people can still fine-tune the chips below.
 const VIBES = [
@@ -63,6 +65,8 @@ const form = ref({
   startTime: '14:00',
   endTime: '19:00',
   area: user?.homeArea && mode.value === 'solo' ? user.homeArea : 'city-hall',
+  // A searched place; when set it wins over `area` (sent as `startArea`).
+  startArea: null,
   interests: [],
   mealWanted: true,
   capacity: 6,
@@ -124,7 +128,85 @@ function goTo(i) {
     focusStep()
   }
 }
-const areaName = computed(() => AREAS.find((a) => a.slug === form.value.area)?.label || '')
+const areaName = computed(() => form.value.startArea?.label || AREAS.find((a) => a.slug === form.value.area)?.label || '')
+
+// Start point: pick a popular area, or search any place, station, address or postal code.
+const SEARCH_DOWN = "Search isn't available right now. Pick a popular area instead."
+const query = ref(''), results = ref([]), searching = ref(false), searchError = ref(''), active = ref(-1), listOpen = ref(false)
+let timer, controller, sequence = 0
+function pickArea(slug) {
+  form.value.area = slug
+  form.value.startArea = null
+  query.value = ''
+  closeList()
+}
+function pickPlace(p) {
+  const label = (p.name || p.address || '').trim().slice(0, 80)
+  if (!label) return
+  form.value.area = null
+  form.value.startArea = { label, lat: Number(p.lat), lng: Number(p.lng) }
+  query.value = label
+  closeList()
+}
+function closeList() {
+  clearTimeout(timer); controller?.abort(); ++sequence
+  results.value = []; searching.value = false; searchError.value = ''; active.value = -1; listOpen.value = false
+}
+function onQuery() {
+  // Typing again drops a previously chosen place until a new one is picked.
+  if (form.value.startArea && query.value !== form.value.startArea.label) {
+    form.value.startArea = null
+    form.value.area = 'city-hall'
+  }
+  clearTimeout(timer); controller?.abort(); ++sequence
+  results.value = []; searchError.value = ''; active.value = -1
+  const q = query.value.trim()
+  if (q.length < 3 || form.value.startArea) { searching.value = false; listOpen.value = false; return }
+  searching.value = true; listOpen.value = true
+  timer = setTimeout(runSearch, 400)
+}
+async function runSearch() {
+  const q = query.value.trim()
+  controller = new AbortController()
+  const { signal } = controller, ticket = ++sequence
+  // Named places come from Geoapify; anything with a digit (address, postal code) also tries OneMap.
+  const jobs = [searchPlaces(q, signal)]
+  if (/\d/.test(q)) jobs.push(geocode(q))
+  const settled = await Promise.allSettled(jobs)
+  if (ticket !== sequence || signal.aborted) return
+  const found = []
+  for (const r of settled) {
+    if (r.status !== 'fulfilled' || !Array.isArray(r.value)) continue
+    for (const p of r.value) {
+      if (!Number.isFinite(Number(p.lat)) || !Number.isFinite(Number(p.lng))) continue
+      const name = p.name || p.address
+      const address = p.name ? p.address : ''
+      if (name && !found.some((x) => x.name === name && x.address === address)) found.push({ id: p.id || `${p.lat},${p.lng}`, name, address, lat: p.lat, lng: p.lng })
+    }
+  }
+  results.value = found.slice(0, 6)
+  searchError.value = !found.length && settled.every((r) => r.status === 'rejected') ? SEARCH_DOWN : ''
+  searching.value = false
+}
+function onKey(e) {
+  if (e.key === 'ArrowDown' && results.value.length) { e.preventDefault(); active.value = (active.value + 1) % results.value.length }
+  else if (e.key === 'ArrowUp' && results.value.length) { e.preventDefault(); active.value = (active.value - 1 + results.value.length) % results.value.length }
+  else if (e.key === 'Enter') {
+    // Enter picks a result here instead of submitting the whole form.
+    e.preventDefault()
+    const p = results.value[active.value >= 0 ? active.value : 0]
+    if (p) pickPlace(p)
+  } else if (e.key === 'Escape' && listOpen.value) { e.stopPropagation(); closeList() }
+}
+onBeforeUnmount(() => { clearTimeout(timer); controller?.abort(); ++sequence })
+
+// Time inputs step in 5 minutes; a typed value snaps to the nearest 5.
+function snapTime(key) {
+  const m = /^(\d{2}):(\d{2})/.exec(form.value[key] || '')
+  if (!m) return
+  const total = Math.min(23 * 60 + 55, Math.round((Number(m[1]) * 60 + Number(m[2])) / 5) * 5)
+  form.value[key] = `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`
+}
 const whenText = computed(() => {
   const f = form.value
   if (mode.value === 'group') return f.dateFrom === f.dateTo ? fmtDateKey(f.dateFrom) : `${fmtDateKey(f.dateFrom)} to ${fmtDateKey(f.dateTo)}`
@@ -171,7 +253,8 @@ async function submit() {
       dateTo: f.dateTo,
       slotStart: at(f.startTime),
       slotEnd: at(f.endTime),
-      area: f.area,
+      area: f.startArea ? null : f.area,
+      startArea: f.startArea || undefined,
       interests: f.interests,
       mealWanted: f.mealWanted,
       capacity: f.capacity,
@@ -223,7 +306,7 @@ async function submit() {
 
     <template v-else>
       <header class="page-head">
-        <h1>{{ mode === 'solo' ? 'Plan for me' : mode === 'public' ? 'Host an open jio' : 'Create a jio' }}</h1>
+        <h1>{{ mode === 'solo' ? 'Plan for me' : mode === 'public' ? 'Host an Open Jio' : 'Create a jio' }}</h1>
         <p>{{ modes.find((m) => m.key === mode).hint }}</p>
       </header>
 
@@ -298,11 +381,11 @@ async function submit() {
                 </div>
                 <div class="col-6 col-sm-3 offset-sm-1">
                   <label for="st" class="small muted">From</label>
-                  <input id="st" v-model="form.startTime" type="time" step="1800" class="form-control" :class="{ 'is-invalid': errors.time }" />
+                  <input id="st" v-model="form.startTime" type="time" step="300" class="form-control" :class="{ 'is-invalid': errors.time }" @change="snapTime('startTime')" />
                 </div>
                 <div class="col-6 col-sm-3">
                   <label for="et" class="small muted">Until</label>
-                  <input id="et" v-model="form.endTime" type="time" step="1800" class="form-control" :class="{ 'is-invalid': errors.time }" />
+                  <input id="et" v-model="form.endTime" type="time" step="300" class="form-control" :class="{ 'is-invalid': errors.time }" @change="snapTime('endTime')" />
                 </div>
               </div>
               <div v-if="errors.time" class="invalid-feedback d-block">{{ errors.time }}</div>
@@ -312,11 +395,42 @@ async function submit() {
           <div v-else-if="step === 2" key="where">
             <h2 ref="stepHeading" tabindex="-1" class="step-title">Where to start?</h2>
             <div class="mb-4">
-              <label for="area" class="form-label">Start area</label>
-              <select id="area" v-model="form.area" class="form-select">
-                <option v-for="a in AREAS" :key="a.slug" :value="a.slug">{{ a.label }}</option>
-              </select>
-              <div class="form-text">Somewhere easy for everyone to reach. Stops stay within a short trip of it.</div>
+              <label for="start" class="form-label">Start point</label>
+              <div class="start-search">
+                <input
+                  id="start"
+                  v-model="query"
+                  class="form-control"
+                  type="search"
+                  role="combobox"
+                  aria-autocomplete="list"
+                  aria-controls="start-results"
+                  :aria-expanded="listOpen && results.length > 0"
+                  :aria-activedescendant="active >= 0 ? `start-opt-${active}` : undefined"
+                  aria-describedby="start-help"
+                  placeholder="Tampines, Jewel, 238801…"
+                  autocomplete="off"
+                  maxlength="100"
+                  @input="onQuery"
+                  @keydown="onKey"
+                />
+                <ul v-if="listOpen && results.length" id="start-results" class="start-results" role="listbox" aria-label="Start point matches">
+                  <li v-for="(p, i) in results" :id="`start-opt-${i}`" :key="p.id + i" role="option" :aria-selected="i === active" class="start-opt" :class="{ on: i === active }" @mousedown.prevent="pickPlace(p)">
+                    <strong>{{ p.name }}</strong><span v-if="p.address" class="small muted">{{ p.address }}</span>
+                  </li>
+                </ul>
+              </div>
+              <p id="start-help" class="form-text mb-0">Search any place, MRT station, address or postal code, or pick a popular area.</p>
+              <p v-if="searching" class="form-text mb-0" role="status">Looking up places…</p>
+              <p v-else-if="searchError" class="form-text text-danger mb-0" role="alert">{{ searchError }}</p>
+              <p v-else-if="listOpen && !results.length && query.trim().length >= 3" class="form-text mb-0" role="status">No matches. Try another name or pick a popular area.</p>
+              <p v-else-if="form.startArea" class="form-text mb-0" role="status">Starting around {{ form.startArea.label }}.</p>
+
+              <div id="areas-label" class="small-caps mt-3 mb-2">Popular areas</div>
+              <div class="chip-row" role="group" aria-labelledby="areas-label">
+                <button v-for="a in AREAS" :key="a.slug" type="button" class="chip" :aria-pressed="!form.startArea && form.area === a.slug" @click="pickArea(a.slug)">{{ a.label }}</button>
+              </div>
+              <div class="form-text mt-2">Somewhere easy for everyone to reach. Stops stay within a short trip of it.</div>
             </div>
 
             <div class="form-check form-switch mb-4">
@@ -356,7 +470,7 @@ async function submit() {
           <button type="submit" class="btn btn-primary" :disabled="submitting">
             <span v-if="submitting" class="spinner-border spinner-border-sm" aria-hidden="true"></span>
             <template v-if="step < STEPS.length - 1">Next</template>
-            <template v-else>{{ mode === 'group' ? 'Create and invite' : mode === 'solo' ? 'Create plan' : 'Create open jio' }}</template>
+            <template v-else>{{ mode === 'group' ? 'Create and invite' : mode === 'solo' ? 'Create plan' : 'Create Open Jio' }}</template>
           </button>
         </div>
       </form>
@@ -417,6 +531,11 @@ legend { font-size: 0.92rem; }
 .mode.on { border-color: var(--tomato); background: var(--tomato-soft); color: var(--tomato-ink); }
 .mode:focus-within { outline: 3px solid var(--oj-focus); outline-offset: 3px; }
 .m-title { font-weight: 700; font-size: 0.95rem; }
+.start-search { position: relative; }
+.start-results { position: absolute; z-index: 5; left: 0; right: 0; top: calc(100% + 4px); list-style: none; margin: 0; padding: 4px; display: grid; gap: 2px; background: var(--card); border: 1px solid var(--line-strong); border-radius: var(--radius); box-shadow: var(--shadow-pop); max-height: 280px; overflow-y: auto; }
+.start-opt { display: grid; gap: 2px; padding: 8px 10px; min-height: 44px; border-radius: 10px; cursor: pointer; }
+.start-opt:hover, .start-opt.on { background: var(--teal-soft); }
+.start-opt strong { overflow-wrap: anywhere; }
 .fine summary { cursor: pointer; font-weight: 600; font-size: 0.92rem; color: var(--ink-2); min-height: 32px; }
 .review { margin: 0; display: grid; gap: 2px; }
 .review > div { display: grid; grid-template-columns: 72px 1fr auto; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px dashed var(--line); }

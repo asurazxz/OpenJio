@@ -65,7 +65,7 @@ async function doReset() {
 const allLinks = [
   { to: '/', label: 'Home', key: 'home', auth: true },
   { to: '/discover', label: 'Discover', key: 'discover' },
-  { to: '/discover?type=hangout', label: 'Open jios', key: 'openjios' },
+  { to: '/discover?type=hangout', label: 'Open Jios', key: 'openjios' },
   { to: '/how', label: 'How it works', key: 'how' },
 ]
 // Signed-out visitors see the same public links on every page, landing included;
@@ -108,7 +108,6 @@ function isActive(key) {
               <span class="small muted">{{ isDemo ? 'Demo account' : 'Your account' }}</span>
             </div>
             <RouterLink to="/profile" class="menu-item">Profile and interests</RouterLink>
-            <RouterLink v-if="user.reviewer" to="/review" class="menu-item">Review listings</RouterLink>
             <button v-if="isDemo" type="button" class="menu-item" @click="switchPerson">Switch person</button>
             <button v-if="isDemo" type="button" class="menu-item" @click="doReset">Reset demo data</button>
             <button type="button" class="menu-item" @click="doSignOut">Sign out</button>

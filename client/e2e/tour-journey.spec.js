@@ -15,9 +15,9 @@ test('tour follows its targets across pages and keeps the explanation beside the
   await expect(card).toBeVisible()
   await expect(page.locator('.tour-shade')).toBeVisible()
   const titles = [
-    'Start with your next outing', 'Solo and public plans are here too',
+    'Start with your next outing',
     'Narrow down the ideas', 'Explore or compare', 'A pin is an idea you can open',
-    'Meet people through Open jios', 'The whole journey at a glance',
+    'Meet people through Open Jios', 'The whole journey at a glance',
     'Create a jio from any page',
   ]
   for (const [index, title] of titles.entries()) {
@@ -32,16 +32,16 @@ test('tour follows its targets across pages and keeps the explanation beside the
       const overlap = target.left < card.right && target.right > card.left && target.top < card.bottom && target.bottom > card.top
       return !overlap && Math.hypot(gapX, gapY) <= 32 && card.left >= 8 && card.right <= innerWidth - 8 && card.top >= 8 && card.bottom <= innerHeight - 8
     })).toBe(true)
-    if (index === 2) await expect(page).toHaveURL(/\/discover/)
-    if (index === 5) await expect(page).toHaveURL(/type=hangout/)
-    if (index === 6) await expect(page).toHaveURL(/\/how/)
-    if (index === 6) {
+    if (index === 1) await expect(page).toHaveURL(/\/discover/)
+    if (index === 4) await expect(page).toHaveURL(/type=hangout/)
+    if (index === 5) await expect(page).toHaveURL(/\/how/)
+    if (index === 5) {
       await current.getByRole('button', { name: 'Back', exact: true }).click()
       await expect(page).toHaveURL(/type=hangout/)
-      await page.getByRole('dialog', { name: titles[5] }).getByRole('button', { name: 'Next', exact: true }).click()
+      await page.getByRole('dialog', { name: titles[4] }).getByRole('button', { name: 'Next', exact: true }).click()
       await expect(current).toBeVisible()
     }
-    if (index === 7) {
+    if (index === 6) {
       const viewport = page.viewportSize()
       await page.setViewportSize({ width: viewport.width < 768 ? 1280 : 375, height: viewport.height })
       await expect.poll(async () => page.locator('[data-tour-active="true"]').evaluate(el => !!el.getClientRects().length)).toBe(true)
@@ -73,7 +73,7 @@ test('tour started on Discover reveals the map even when cards were selected', a
 test('tour supports Back and keyboard dismissal and releases the page', async ({ page }) => {
   await startTour(page)
   await page.getByRole('dialog', { name: 'Start with your next outing' }).getByRole('button', { name: 'Next', exact: true }).click()
-  await page.getByRole('dialog', { name: 'Solo and public plans are here too' }).getByRole('button', { name: 'Back', exact: true }).click()
+  await page.getByRole('dialog', { name: 'Narrow down the ideas' }).getByRole('button', { name: 'Back', exact: true }).click()
   const card = page.getByRole('dialog', { name: 'Start with your next outing' })
   await expect(card).toBeVisible()
   await page.keyboard.press('Shift+Tab')

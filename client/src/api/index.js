@@ -49,7 +49,3 @@ export const reopenVoting = api.reopenVoting
 export const addToShortlist = api.addToShortlist
 export const removeFromShortlist = api.removeFromShortlist
 export const lateJoin = api.lateJoin
-export const listDrafts = api.listDrafts
-export const publishDraft = api.publishDraft
-export const rejectDraft = api.rejectDraft
-export const unpublish = api.unpublish

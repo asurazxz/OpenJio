@@ -39,7 +39,7 @@ function osmPlace(id, extra = {}) {
 }
 
 function freshState() {
-  return { version: 1, users: [{ id: 'host', name: 'host', interests: { arts: 0.9 } }], hangouts: [], members: [], availability: {}, prefs: {}, itineraries: {}, votes: {}, published: [], reviews: {} }
+  return { version: 1, users: [{ id: 'host', name: 'host', interests: { arts: 0.9 } }], hangouts: [], members: [], availability: {}, prefs: {}, itineraries: {}, votes: {}, published: [] }
 }
 
 // One engine instance over a shared state, the way a page reload creates a new one.

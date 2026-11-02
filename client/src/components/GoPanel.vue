@@ -30,7 +30,14 @@ function fmtHHMM(ms) {
   const d = new Date(ms + 8 * 3600e3)
   return `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`
 }
-const departTime = ref(defaultDepart())
+// Time inputs step by 5 minutes; a typed value off that grid is rounded to the nearest 5 (never past 23:55).
+function snap5(v) {
+  const m = /^(\d{2}):(\d{2})/.exec(v || '')
+  if (!m) return v
+  const total = Math.min(23 * 60 + 55, Math.round((Number(m[1]) * 60 + Number(m[2])) / 5) * 5)
+  return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`
+}
+const departTime = ref(snap5(defaultDepart()))
 const result = ref(null)
 const checking = ref(false)
 
@@ -224,7 +231,7 @@ async function end(stage) {
             </div>
             <div class="col-5">
               <label for="dep" class="small muted">At</label>
-              <input id="dep" v-model="departTime" type="time" step="900" class="form-control" required />
+              <input id="dep" v-model="departTime" type="time" step="300" class="form-control" required @change="departTime = snap5(departTime)" />
             </div>
             <div class="col-12 d-flex flex-wrap gap-2 align-items-center">
               <button v-if="!geo" type="button" class="btn btn-ghost btn-sm px-0" @click="useLocation">Use my location instead</button>

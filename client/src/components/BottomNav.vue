@@ -7,7 +7,7 @@ const items = [
   { to: '/', key: 'home', label: 'Home', icon: 'M4 11.5 12 5l8 6.5V19a1 1 0 0 1-1 1h-4.5v-5h-5v5H5a1 1 0 0 1-1-1Z' },
   { to: '/discover', key: 'discover', label: 'Discover', icon: 'M11 4a7 7 0 1 1 0 14 7 7 0 0 1 0-14Zm5 12 4 4' },
   { to: '/new', key: 'new', label: 'Create', icon: 'M12 6v12M6 12h12', primary: true },
-  { to: '/discover?type=hangout', key: 'openjios', label: 'Open jios', icon: 'M8 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6Zm8 0a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM3 19a5 5 0 0 1 10 0M13.5 15.5A5 5 0 0 1 21 19' },
+  { to: '/discover?type=hangout', key: 'openjios', label: 'Open Jios', icon: 'M8 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6Zm8 0a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM3 19a5 5 0 0 1 10 0M13.5 15.5A5 5 0 0 1 21 19' },
   { to: '/profile', key: 'profile', label: 'Me', icon: 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm-7 8a7 7 0 0 1 14 0' },
 ]
 

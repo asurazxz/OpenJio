@@ -8,9 +8,8 @@ const routes = [
   { path: '/new', name: 'new', component: () => import('./views/NewHangoutView.vue'), meta: { auth: true, title: 'Create a jio' } },
   { path: '/h/:id', name: 'hangout', component: () => import('./views/HangoutView.vue'), meta: { auth: true, title: 'Hangout' } },
   { path: '/j/:token', name: 'join', component: () => import('./views/JoinView.vue'), meta: { title: 'Join', bare: true } },
-  { path: '/o/:id', name: 'openjio', component: () => import('./views/JoinView.vue'), meta: { title: 'Open jio', bare: true } },
+  { path: '/o/:id', name: 'openjio', component: () => import('./views/JoinView.vue'), meta: { title: 'Open Jio', bare: true } },
   { path: '/profile', name: 'profile', component: () => import('./views/ProfileView.vue'), meta: { auth: true, title: 'Profile' } },
-  { path: '/review', name: 'review', component: () => import('./views/ReviewView.vue'), meta: { auth: true, title: 'Review listings' } },
   { path: '/how', name: 'how', component: () => import('./views/HowView.vue'), meta: { title: 'How planning works' } },
   { path: '/:pathMatch(.*)*', name: 'notfound', component: () => import('./views/NotFoundView.vue'), meta: { title: 'Not found' } },
 ]
@@ -26,7 +25,8 @@ router.beforeEach((to) => {
 })
 
 router.afterEach((to) => {
-  document.title = to.name === 'home' && !session.userId ? 'OpenJio | Plan your next outing' : to.meta.title ? `${to.meta.title} | OpenJio` : 'OpenJio'
+  const title = to.name === 'discover' && to.query.type === 'hangout' ? 'Open Jios' : to.meta.title
+  document.title = to.name === 'home' && !session.userId ? 'OpenJio | Plan your next outing' : title ? `${title} | OpenJio` : 'OpenJio'
 })
 
 export default router

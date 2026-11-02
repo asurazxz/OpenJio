@@ -8,7 +8,6 @@ export const PERSONAS = [
     homeArea: 'tiong-bahru',
     bio: 'Plans the group outings. Will travel for good kopi.',
     interests: { cafes: 1, food: 0.8, arts: 0.6, markets: 0.5 },
-    reviewer: true,
   },
   {
     id: 'u-arjun',

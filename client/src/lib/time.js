@@ -99,11 +99,14 @@ export function fmtDay(ms) {
   return `${DAY_SHORT[p.weekday]} ${p.day} ${MONTHS[p.month - 1]}`
 }
 
-/** "Sat 14 Nov, 2 pm to 7 pm" */
+/** "Sat 14 Nov, 2 pm to 7 pm"; a range that crosses a year names both years. */
 export function fmtRange(startMs, endMs) {
   const sameDay = sgDateKey(startMs) === sgDateKey(endMs - 1)
   if (sameDay) return `${fmtDay(startMs)}, ${fmtTime(startMs)} to ${fmtTime(endMs)}`
-  return `${fmtDay(startMs)} ${fmtTime(startMs)} to ${fmtDay(endMs)} ${fmtTime(endMs)}`
+  const startYear = sgParts(startMs).year
+  const endYear = sgParts(endMs).year
+  const day = (ms, year) => (startYear === endYear ? fmtDay(ms) : `${fmtDay(ms)} ${year}`)
+  return `${day(startMs, startYear)} ${fmtTime(startMs)} to ${day(endMs, endYear)} ${fmtTime(endMs)}`
 }
 
 export function fmtDuration(mins) {

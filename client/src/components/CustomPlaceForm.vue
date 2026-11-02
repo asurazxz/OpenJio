@@ -6,6 +6,13 @@ import { geocode } from '../lib/travel.js'
 import { fmtTime } from '../lib/time.js'
 import MapView from './MapView.vue'
 
+// Time inputs step by 5 minutes; a typed value off that grid is rounded to the nearest 5 (never past 23:55).
+function snap5(v) {
+  const m = /^(\d{2}):(\d{2})/.exec(v || '')
+  if (!m) return v
+  const total = Math.min(23 * 60 + 55, Math.round((Number(m[1]) * 60 + Number(m[2])) / 5) * 5)
+  return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`
+}
 const props = defineProps({ hangoutId: { type: String, required: true }, manual: Boolean, disabled: Boolean })
 const emit = defineEmits(['added'])
 const query = ref(''), results = ref([]), loading = ref(false), error = ref(''), saving = ref(false)
@@ -160,8 +167,8 @@ onBeforeUnmount(() => { clearTimeout(timer); controller?.abort(); ++sequence; ++
           <summary class="small fw-bold">Add opening hours for the outing day (optional)</summary>
           <p class="small muted my-2">Only enter hours you have checked. Otherwise this stop will show “Hours not verified”.</p>
           <div class="row g-3">
-            <label class="col-6 field">Opens<input v-model="form.opens" type="time" class="form-control" /></label>
-            <label class="col-6 field">Closes<input v-model="form.closes" type="time" class="form-control" /></label>
+            <label class="col-6 field">Opens<input v-model="form.opens" type="time" step="300" class="form-control" @change="form.opens = snap5(form.opens)" /></label>
+            <label class="col-6 field">Closes<input v-model="form.closes" type="time" step="300" class="form-control" @change="form.closes = snap5(form.closes)" /></label>
           </div>
         </details>
       </div>

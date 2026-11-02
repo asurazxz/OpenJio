@@ -207,10 +207,10 @@ export function rankSlots({ members, availability, rangeStart, rangeEnd, options
     const weekend = isWeekend(slot.start) ? 1 : 0
     const score = 0.6 * attendance + 0.2 * usable + 0.15 * pref + 0.05 * weekend
     const reasons = [`${attendees.length} of ${total} can make it`]
-    if (missing.length && unknown.length) reasons.push(`${unknown.length} not responded yet`)
-    if (pref >= 0.99) reasons.push('Within preferred hours')
-    if (weekend) reasons.push('Weekend')
-    reasons.push(`Free ${fmtTime(c.start)} to ${fmtTime(c.end)}`)
+    if (missing.length && unknown.length) reasons.push(unknown.length === 1 ? "1 person hasn't replied" : `${unknown.length} people haven't replied`)
+    if (pref >= 0.99) reasons.push('within preferred hours')
+    if (weekend) reasons.push('weekend')
+    reasons.push(`free ${fmtTime(c.start)} to ${fmtTime(c.end)}`)
     return {
       id: `${slot.start}-${slot.end}-${attendees.join('.')}`,
       start: slot.start,

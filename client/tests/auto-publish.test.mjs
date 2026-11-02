@@ -22,7 +22,7 @@ function autoDraft(extra = {}) {
 
 function fixture(initial = []) {
   let actor = 'host', serial = 0, writes = 0, drafts = initial, failing = false, fetches = 0
-  const state = { version: 1, users: [{ id: 'host', name: 'host', interests: {}, reviewer: true }], hangouts: [], members: [], availability: {}, prefs: {}, itineraries: {}, votes: {}, published: [], reviews: {} }
+  const state = { version: 1, users: [{ id: 'host', name: 'host', interests: {} }], hangouts: [], members: [], availability: {}, prefs: {}, itineraries: {}, votes: {}, published: [] }
   const api = createApiEngine({
     load: () => state, persist() { writes++ }, uid: prefix => `${prefix}-${++serial}`, token: () => `invite-${++serial}`,
     getSessionUserId: () => actor, setSessionUserId: id => { actor = id }, resetDemo() {},
@@ -50,20 +50,6 @@ test('a complete auto draft is listed as auto-extracted and manual-view-only, wi
   assert.equal(auto.source.name, '@sgfooddeals')
   assert.equal(auto.source.url, 'https://t.me/sgfooddeals/1')
   assert.equal(f.state.published.length, 0)
-})
-
-test('a reviewer decision always wins over the automatic listing', async () => {
-  const f = fixture([autoDraft()])
-  assert.ok((await f.api.listListings()).some(l => l.id === 'pub-a1'))
-  // Reviewer publishes it: the reviewed listing replaces the auto one.
-  await f.api.publishDraft(autoDraft())
-  const published = (await f.api.listListings()).filter(l => l.id === 'pub-a1')
-  assert.equal(published.length, 1)
-  assert.equal(published[0].autoPublished, undefined)
-
-  const g = fixture([autoDraft()])
-  await g.api.rejectDraft('a1', 'not a real deal')
-  assert.ok(!(await g.api.listListings()).some(l => l.id === 'pub-a1'))
 })
 
 test('retired, expired-deal, expired-event and non-auto drafts are excluded', async () => {

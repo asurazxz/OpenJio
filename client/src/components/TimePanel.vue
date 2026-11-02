@@ -53,18 +53,34 @@ const lockingId = ref(null)
 let previewRequest = 0
 let previewTimer = null
 const isSoloOrPublic = computed(() => h.value.visibility === 'public' || h.value.mode === 'solo')
-// 24-hour values stay as "HH:MM" (inputSlot parses them); only the labels are shown in 12-hour time.
-const halfHours = Array.from({ length: 49 }, (_, i) => `${String(Math.floor(i / 2)).padStart(2, '0')}:${i % 2 ? '30' : '00'}`)
-// Keep an off-grid value (for example from a custom slot) selectable so editing never silently drops it.
+// 24-hour values stay as "HH:MM" (inputSlot parses them). Each time is picked as an hour (12-hour
+// labels) and a minute in 5-minute steps; "24:00" is the end-of-day midnight.
+const pad2 = (n) => String(n).padStart(2, '0')
+const startHours = Array.from({ length: 24 }, (_, i) => pad2(i))
+const endHours = Array.from({ length: 24 }, (_, i) => pad2(i + 1))
+const fiveMinutes = Array.from({ length: 12 }, (_, i) => pad2(i * 5))
+// Keep an off-grid minute (for example from a custom slot) selectable so editing never silently drops it.
 const withCurrent = (list, value) => (value && !list.includes(value) ? [...list, value].sort() : list)
-const startOptions = computed(() => withCurrent(halfHours.slice(0, 48), adjust.value?.start))
-const endOptions = computed(() => withCurrent(halfHours.slice(1), adjust.value?.end))
-function label12(hhmm) {
-  if (hhmm === '24:00') return '12:00 am (midnight)'
-  const [hh, mm] = hhmm.split(':').map(Number)
-  const hour = hh % 12 === 0 ? 12 : hh % 12
-  return `${hour}:${String(mm).padStart(2, '0')} ${hh < 12 ? 'am' : 'pm'}`
+function hourLabel(hh) {
+  if (hh === '24') return '12 am (midnight)'
+  const n = Number(hh)
+  return `${n % 12 === 0 ? 12 : n % 12} ${n < 12 ? 'am' : 'pm'}`
 }
+function timePart(key, part) {
+  return computed({
+    get: () => adjust.value?.[key].split(':')[part === 'hour' ? 0 : 1],
+    set: (value) => {
+      const [hh, mm] = adjust.value[key].split(':')
+      adjust.value[key] = part === 'hour' ? `${value}:${value === '24' ? '00' : mm}` : `${hh}:${value}`
+    },
+  })
+}
+const startHour = timePart('start', 'hour')
+const startMinute = timePart('start', 'minute')
+const endHour = timePart('end', 'hour')
+const endMinute = timePart('end', 'minute')
+const startMinutes = computed(() => withCurrent(fiveMinutes, startMinute.value))
+const endMinutes = computed(() => withCurrent(fiveMinutes, endMinute.value))
 function inputSlot() {
   if (!adjust.value) return null
   const [y, m, d] = adjust.value.date.split('-').map(Number)
@@ -117,6 +133,11 @@ async function checkPreview() {
 async function lockPreview() {
   if (!preview.value?.ok || !adjust.value) return
   await lock({ start: preview.value.start, end: preview.value.end })
+}
+// The reasons after the headcount, as one short line: "1 person hasn't replied · within preferred hours".
+function why(slot) {
+  const text = slot.reasons.slice(1).join(' · ')
+  return text.charAt(0).toUpperCase() + text.slice(1)
 }
 // Split who cannot come into "said no" and "has not answered", so the two are never confused.
 function breakdown(slot) {
@@ -271,11 +292,11 @@ async function unlock() {
                     <li v-if="breakdown(s).cant.length" class="w-cant"><span class="w-k">Can't</span> {{ breakdown(s).cant.join(', ') }}</li>
                     <li v-if="breakdown(s).pending.length" class="w-pend"><span class="w-k">No reply</span> {{ breakdown(s).pending.join(', ') }}</li>
                   </ul>
-                  <p v-if="s.reasons.length > 1" class="small muted m-0">{{ s.reasons.slice(1).join('. ') }}.</p>
+                  <p v-if="s.reasons.length > 1" class="small muted m-0">{{ why(s) }}</p>
                   <div class="slot-act">
-                    <button type="button" class="btn btn-ghost btn-sm" :aria-pressed="chosen === s.id" @click="chosen = s.id; comparisonOpen = true">Show on grid</button>
+                    <button type="button" class="btn-text" :aria-pressed="chosen === s.id" @click="chosen = s.id; comparisonOpen = true">Show on grid</button>
                     <button v-if="isHost && !isSoloOrPublic" type="button" class="btn btn-sm" :class="i === 0 ? 'btn-primary' : 'btn-secondary'" :disabled="!!lockingId" @click="lock(s)">{{ lockingId === s.id ? 'Locking…' : 'Lock this time' }}</button>
-                    <button v-if="isHost && !isSoloOrPublic" type="button" class="btn btn-ghost btn-sm" @click="editSlot(s)">Adjust time</button>
+                    <button v-if="isHost && !isSoloOrPublic" type="button" class="btn-text" @click="editSlot(s)">Adjust time</button>
                   </div>
                 </article>
               </li>
@@ -323,8 +344,20 @@ async function unlock() {
           <p class="small muted">Required people must be available for the full time. Attendance updates as you change the time.</p>
           <div class="row g-3">
             <div class="col-12"><label for="slot-date" class="form-label">Date</label><input id="slot-date" v-model="adjust.date" type="date" class="form-control" :min="h.dateFrom" :max="h.dateTo" /></div>
-            <div class="col-6"><label for="slot-start" class="form-label">Start time</label><select id="slot-start" v-model="adjust.start" class="form-select"><option v-for="time in startOptions" :key="time" :value="time">{{ label12(time) }}</option></select></div>
-            <div class="col-6"><label for="slot-end" class="form-label">End time</label><select id="slot-end" v-model="adjust.end" class="form-select"><option v-for="time in endOptions" :key="time" :value="time">{{ label12(time) }}</option></select></div>
+            <div class="col-6">
+              <label for="slot-start" class="form-label">Start time</label>
+              <div class="time-pick">
+                <select id="slot-start" v-model="startHour" class="form-select"><option v-for="hh in startHours" :key="hh" :value="hh">{{ hourLabel(hh) }}</option></select>
+                <select v-model="startMinute" class="form-select" aria-label="Start minutes"><option v-for="mm in startMinutes" :key="mm" :value="mm">:{{ mm }}</option></select>
+              </div>
+            </div>
+            <div class="col-6">
+              <label for="slot-end" class="form-label">End time</label>
+              <div class="time-pick">
+                <select id="slot-end" v-model="endHour" class="form-select"><option v-for="hh in endHours" :key="hh" :value="hh">{{ hourLabel(hh) }}</option></select>
+                <select v-model="endMinute" class="form-select" aria-label="End minutes" :disabled="endHour === '24'"><option v-for="mm in endMinutes" :key="mm" :value="mm">:{{ mm }}</option></select>
+              </div>
+            </div>
           </div>
           <div v-if="previewError" class="notice danger mt-3" role="alert">{{ previewError }}</div>
           <p class="small muted mt-2 mb-0" role="status">{{ previewing ? 'Checking who can come…' : '' }}</p>
@@ -392,19 +425,25 @@ async function unlock() {
 .w-free .w-k { background: var(--teal-soft); color: var(--teal-ink); }
 .w-cant .w-k { background: var(--paper-2); color: var(--ink-2); }
 .w-pend .w-k { background: var(--mustard-soft); color: var(--mustard-ink); }
-.slot-act { display: flex; justify-content: flex-end; gap: 6px; flex-wrap: wrap; }
+.slot-act { display: flex; justify-content: flex-end; align-items: center; gap: 6px 14px; flex-wrap: wrap; }
+/* Secondary actions on a best-time card read as links so "Lock this time" is the one button. */
+.btn-text { min-height: 36px; padding: 0 2px; border: 0; background: none; color: var(--ink-2); font-size: 0.88rem; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
+.btn-text:hover { color: var(--ink); }
+.btn-text:focus-visible { outline: 2px solid var(--tomato); outline-offset: 2px; border-radius: 4px; }
+.btn-text[aria-pressed='true'] { color: var(--tomato-ink, var(--ink)); }
 .compare-layout { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(260px, .8fr); gap: 22px; }
 .adjust-layout { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(340px, .85fr); gap: 24px; align-items: start; }
 .overlap-grid { max-height: min(58vh, 560px); overflow: auto; overscroll-behavior: contain; border-radius: 12px; }
 @media (min-width: 768px) {
   .overlap-grid { max-height: none; overflow: visible; }
-  .overlap-grid :deep(.grid-wrap) { max-height: min(58vh, 560px); }
+  .overlap-grid :deep(.grid-wrap) { --grid-top: 0px; max-height: min(58vh, 560px); overflow: auto; }
 }
 .compare-slots { display: grid; gap: 8px; padding-left: 0; list-style: none; }
 .compare-choice { display: grid; gap: 3px; width: 100%; text-align: left; border: 1px solid var(--line); background: var(--card); color: var(--ink); border-radius: 12px; padding: 10px; }
 .compare-choice[aria-pressed="true"] { outline: 3px solid var(--tomato); }
 .compare-choice span { font-size: .85rem; color: var(--ink-2); }
 .adjust-form { max-width: 680px; }
+.time-pick { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 6px; }
 @media (max-width: 767.98px) {
   .compare-layout, .adjust-layout { grid-template-columns: 1fr; }
   .adjust-layout .overlap-grid { max-height: 32vh; }

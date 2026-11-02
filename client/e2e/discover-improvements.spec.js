@@ -55,7 +55,10 @@ test('Discover caps map pins at 30 and pages Cards 24 at a time for a large cata
   await page.route('**/api/places/catalogue*', route => route.fulfill({ status: 200, json: places }))
   await page.goto('/discover')
   await expect(page.getByRole('region', { name: 'Map', exact: true })).toBeVisible()
-  await expect(page.getByText(/^Showing 30 of \d+ — filter by area or type to narrow it down$/)).toBeVisible()
+  // The map caption counts from the same total as the results line above the map.
+  const total = (await page.getByRole('status').filter({ hasText: /\d+ results/ }).innerText()).match(/(\d+) results/)[1]
+  await expect(page.locator('.map-cap')).toContainText(`Map shows 30 of ${total}.`)
+  await expect(page.locator('.map-cap')).toContainText('Filter by area or type to narrow it down.')
   // Each pin or bubble is one DOM marker, so at most 30 can be on screen.
   await expect.poll(() => page.locator('.leaflet-marker-icon').count()).toBeLessThanOrEqual(30)
   await expect.poll(() => page.locator('.leaflet-marker-icon').count()).toBeGreaterThan(0)
@@ -67,7 +70,7 @@ test('Discover caps map pins at 30 and pages Cards 24 at a time for a large cata
   await expect(cards).toHaveCount(48)
 })
 
-for (const [name, path] of [['Discover', '/discover'], ['Open jios', '/discover?type=hangout']]) {
+for (const [name, path] of [['Discover', '/discover'], ['Open Jios', '/discover?type=hangout&view=map']]) {
   test(`${name} gives the map full width and opens the selected pin details`, async ({ page }) => {
     await page.goto(path)
     await expect(page.getByRole('heading', { level: 1, name, exact: true })).toBeVisible()
@@ -90,7 +93,7 @@ for (const [name, path] of [['Discover', '/discover'], ['Open jios', '/discover?
     const title = await preview.locator('.map-preview-title').innerText()
     await expect(marker).toHaveAccessibleName(title)
     await expect(preview.locator('.map-preview-location')).not.toBeEmpty()
-    if (name === 'Open jios') await expect(preview).toContainText('spots left')
+    if (name === 'Open Jios') await expect(preview).toContainText('spots left')
     await marker.click()
     const detail = page.getByRole('dialog', { name: title, exact: true })
     await expect(detail).toBeVisible()
@@ -125,3 +128,18 @@ for (const [name, path] of [['Discover', '/discover'], ['Open jios', '/discover?
     await expect.poll(zoom).toBeLessThan(zoomed)
   })
 }
+
+test('Open Jios opens on Cards with its own header and a way back to Discover', async ({ page }) => {
+  await page.goto('/discover?type=hangout')
+  await expect(page.getByRole('heading', { level: 1, name: 'Open Jios', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Cards view', exact: true })).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.locator('.map-col')).toBeHidden()
+  await expect(page.getByRole('group', { name: 'Type', exact: true })).toHaveCount(0)
+  await expect(page.getByRole('link', { name: 'Host an Open Jio', exact: true })).toHaveAttribute('href', '/new?mode=public')
+  const card = page.locator('.cards article').first()
+  await expect(card).toContainText(/\d+ of \d+ spots left|Full/)
+  await expect(card).toContainText('Hosted by')
+  await page.getByRole('link', { name: 'Browse all of Discover', exact: true }).click()
+  await expect(page.getByRole('heading', { level: 1, name: 'Discover', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Map view', exact: true })).toHaveAttribute('aria-pressed', 'true')
+})

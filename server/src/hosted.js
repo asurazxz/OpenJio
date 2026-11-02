@@ -10,7 +10,7 @@ const OPERATIONS = new Set([
   'renewInvite', 'saveAvailability', 'clearAvailability', 'savePreferences', 'getSlots',
   'previewSlot', 'lockSlot', 'unlockSlot', 'getPlan', 'generatePlan', 'setPlanStops', 'getAlternatives',
   'previewCustomStop', 'addCustomStop', 'previewStops', 'vote', 'finalizePlan', 'reopenVoting', 'addToShortlist',
-  'removeFromShortlist', 'lateJoin', 'listDrafts', 'publishDraft', 'rejectDraft', 'unpublish',
+  'removeFromShortlist', 'lateJoin',
 ]);
 export function domainError(code, message) { return Object.assign(new Error(message), { code }); }
 

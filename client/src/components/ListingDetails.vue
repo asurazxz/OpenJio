@@ -22,8 +22,7 @@ const sourceText = computed(() => (props.listing.source?.kind === 'osm' ? 'OpenS
   <article class="listing-details">
     <p v-if="listing.routeReady === false && !listing.autoPublished" class="notice small">This listing is available to browse, but its visit details are incomplete. It can be saved to a shortlist; it cannot yet be added as an itinerary stop.</p>
     <p v-if="listing.autoPublished" class="auto-note small">
-      <span class="tag auto-tag">Auto-extracted · not reviewed</span>
-      Pulled automatically from {{ listing.source?.name || 'a public source' }} and checked for dates and location only. Confirm details with the source before you go.
+      Read automatically from a public post by {{ listing.source?.name || 'a public source' }}. Check the original before you go.
       <span v-if="listing.autoNote">{{ listing.autoNote }}</span>
       <a v-if="sourceUrl" :href="sourceUrl" target="_blank" rel="noopener noreferrer">Original post <span aria-hidden="true">↗</span></a>
     </p>
@@ -77,8 +76,8 @@ const sourceText = computed(() => (props.listing.source?.kind === 'osm' ? 'OpenS
     </div>
 
     <p v-if="listing.sample" class="sample-note">Sample listing. Hours and prices are approximate; event and deal names are made up.</p>
-    <footer v-if="listing.autoPublished" class="detail-actions"><span class="small muted">Not reviewed yet, so it can’t be added to a plan. Check the original post for details.</span><a :href="listing.source?.url" target="_blank" rel="noopener noreferrer" class="btn btn-primary">View original post</a></footer>
-    <footer v-else class="detail-actions"><span class="small muted">{{ listing.type === 'hangout' ? 'See the plan and who is going.' : 'Save this idea to a plan’s shortlist. It does not make a booking.' }}</span><button type="button" class="btn btn-primary" @click="$emit('add')">{{ listing.type === 'hangout' ? 'View open jio' : 'Add to a plan' }}</button></footer>
+    <footer v-if="listing.autoPublished" class="detail-actions"><span class="small muted">This one is view-only, so it can’t be added to a plan. Check the original post for details.</span><a :href="listing.source?.url" target="_blank" rel="noopener noreferrer" class="btn btn-primary">View original post</a></footer>
+    <footer v-else class="detail-actions"><span class="small muted">{{ listing.type === 'hangout' ? 'See the plan and who is going.' : 'Save this idea to a plan’s shortlist. It does not make a booking.' }}</span><button type="button" class="btn btn-primary" @click="$emit('add')">{{ listing.type === 'hangout' ? 'View Open Jio' : 'Add to a plan' }}</button></footer>
   </article>
 </template>
 
@@ -103,7 +102,6 @@ dd { margin: 4px 0 0; font-weight: 700; }
 .provenance { display: grid; gap: 8px; margin-top: 20px; padding-top: 14px; border-top: 1px dashed var(--line); font-size: .85rem; }
 .auto-note { display: grid; gap: 8px; justify-items: start; background: var(--mustard-soft); color: var(--mustard-ink); border-radius: 12px; padding: 12px 14px; margin: 0 0 20px; }
 .auto-note a { color: inherit; font-weight: 700; }
-.auto-tag { background: var(--mustard-soft); color: var(--mustard-ink); font-weight: 700; }
 .missing-tag { background: var(--paper-2); color: var(--ink-2); font-size: .78rem; }
 .visit-note { margin: 12px 0 0; }
 .listed-hours { margin: 10px 0 0; }
