@@ -40,6 +40,11 @@ function snap5(v) {
 const departTime = ref(snap5(defaultDepart()))
 const result = ref(null)
 const checking = ref(false)
+// What the shown result was worked out from, so it can be read back and never outlives its inputs.
+const basis = ref(null)
+let checkRequest = 0
+function clearResult() { checkRequest++; result.value = null; basis.value = null; checking.value = false }
+watch([originArea, geo, departTime], clearResult)
 
 function useLocation() {
   if (h.value.stage !== 'final') return
@@ -61,17 +66,23 @@ function useLocation() {
 
 async function check() {
   if (h.value.stage !== 'final' || !slotDay.value || checking.value) return
+  const request = ++checkRequest
   checking.value = true
   result.value = null
+  basis.value = null
   try {
     const [hh, mm] = departTime.value.split(':').map(Number)
     const departMs = fromDateKey(slotDay.value) + (hh * 60 + mm) * MIN
     const from = geo.value || AREAS.find((a) => a.slug === originArea.value)
-    result.value = await lateJoin(h.value.id, { from, departMs })
+    const r = await lateJoin(h.value.id, { from, departMs })
+    // A newer request, or a changed input, supersedes this answer.
+    if (request !== checkRequest) return
+    result.value = r
+    basis.value = { origin: from.label, departMs }
   } catch (e) {
-    toastError(e)
+    if (request === checkRequest) toastError(e)
   } finally {
-    checking.value = false
+    if (request === checkRequest) checking.value = false
   }
 }
 
@@ -97,12 +108,14 @@ async function loadWeather(fresh = false) {
     if (weatherController === controller) weatherLoading.value = false
   }
 }
-watch(() => [h.value.id, h.value.lockedSlot?.start, h.value.stage], () => { result.value = null; loadWeather() }, { immediate: true })
+watch(() => [h.value.id, h.value.lockedSlot?.start, h.value.stage], () => { clearResult(); loadWeather() }, { immediate: true })
+watch(() => (plan.value?.stops || []).map((s) => s.listingId).join('|'), clearResult)
 function weatherTime(value) {
   const ms = Date.parse(value)
   return Number.isFinite(ms) ? `${fmtDay(ms)}, ${fmtTime(ms)}` : 'Not supplied'
 }
 
+const outingDay = computed(() => (slotDay.value ? fmtDay(fromDateKey(slotDay.value)) : ''))
 const backup = computed(() => result.value?.options?.[1] || null)
 const directionsUrl = computed(() => {
   const st = result.value?.best?.stop.listing
@@ -230,7 +243,7 @@ async function end(stage) {
               </select>
             </div>
             <div class="col-5">
-              <label for="dep" class="small muted">At</label>
+              <label for="dep" class="small muted">Leaving<span v-if="outingDay" class="tnum"> on {{ outingDay }}</span> at</label>
               <input id="dep" v-model="departTime" type="time" step="300" class="form-control" required @change="departTime = snap5(departTime)" />
             </div>
             <div class="col-12 d-flex flex-wrap gap-2 align-items-center">
@@ -244,17 +257,24 @@ async function end(stage) {
           </form>
 
           <Transition name="oj-rise">
-            <div v-if="result" class="result mt-3" role="status">
+            <div v-if="result && basis" class="result mt-3" role="status">
+              <p class="small m-0 mb-2 r-basis tnum">Based on leaving {{ basis.origin }} at {{ fmtTime(basis.departMs) }}, {{ fmtDay(basis.departMs) }}.</p>
               <template v-if="result.best">
                 <p class="r-label">Meet them at stop {{ result.best.index + 1 }}</p>
                 <p class="r-title">{{ result.best.stop.listing.title }}</p>
+                <dl class="r-facts tnum">
+                  <div><dt>You arrive</dt><dd>{{ fmtTime(result.best.arriveMs) }}</dd></div>
+                  <div><dt>Group arrives</dt><dd>{{ fmtTime(result.best.groupStartMs) }}</dd></div>
+                </dl>
                 <p class="m-0 tnum">
-                  You should get there around <strong>{{ fmtTime(result.best.arriveMs) }}</strong>, about {{ fmtDuration(result.best.overlapMins) }} before the group moves on.
+                  <template v-if="result.best.waitMins > 0">Wait about <strong>{{ fmtDuration(result.best.waitMins) }}</strong> for them.</template>
+                  <template v-else><strong>You join them partway.</strong></template>
+                  Together until <strong>{{ fmtTime(result.best.untilMs) }}</strong> ({{ fmtDuration(result.best.overlapMins) }}).
                 </p>
                 <p class="small m-0 mt-1 tnum r-meta">
                   About {{ fmtDuration(result.best.travelMins) }} {{ result.best.travelMode === 'walk' ? 'on foot' : 'by MRT or bus' }}<template v-if="result.best.estimate">, estimated from distance</template>. This is a planned time, not a guarantee.
                 </p>
-                <p v-if="backup" class="small m-0 mt-2 tnum">If it gets tight: stop {{ backup.index + 1 }}, {{ backup.stop.listing.title }}, around {{ fmtTime(backup.arriveMs) }}.</p>
+                <p v-if="backup" class="small m-0 mt-2 tnum">If it gets tight: stop {{ backup.index + 1 }}, {{ backup.stop.listing.title }}. You arrive {{ fmtTime(backup.arriveMs) }}, meet the group at {{ fmtTime(backup.meetMs) }}, together until {{ fmtTime(backup.untilMs) }} ({{ fmtDuration(backup.overlapMins) }}).</p>
                 <div class="d-flex flex-wrap gap-2 mt-3">
                   <a :href="directionsUrl" target="_blank" rel="noopener" class="btn btn-secondary btn-sm">View directions</a>
                   <button type="button" class="btn btn-secondary btn-sm" @click="shareEta">Share my ETA</button>
@@ -293,7 +313,11 @@ async function end(stage) {
 .result { padding: 14px 16px; border-radius: 16px; background: var(--teal-soft); border: 1px solid color-mix(in srgb, var(--teal) 35%, transparent); }
 .r-label { margin: 0; font-weight: 800; font-size: 0.85rem; color: var(--teal-ink); }
 .r-title { font-family: var(--font-display); font-weight: 900; font-size: 1.25rem; margin: 2px 0 6px; }
-.r-meta { color: var(--ink-2); }
+.r-facts { display: flex; flex-wrap: wrap; gap: 6px 24px; margin: 0 0 8px; }
+.r-facts div { display: grid; }
+.r-facts dt { font-size: 0.8rem; font-weight: 700; color: var(--ink-2); }
+.r-facts dd { margin: 0; font-family: var(--font-display); font-weight: 900; font-size: 1.15rem; }
+.r-meta, .r-basis { color: var(--ink-2); }
 .unconfirmed { display: grid; gap: 20px; padding: 24px 20px; border: 1.5px dashed var(--line-strong); border-radius: var(--radius-lg); background: var(--card); }
 .u-title { margin: 0 0 6px; }
 .u-lede { margin: 0; color: var(--ink-2); max-width: 60ch; }

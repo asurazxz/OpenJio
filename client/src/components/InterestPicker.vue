@@ -1,6 +1,6 @@
 <script setup>
 // Multi-select chips. v-model is an array of slugs, or a weights object when `weighted` is set
-// (tap cycles 0 -> like (0.6) -> love (1) -> 0).
+// (a click cycles 0 -> like (0.6) -> love (1) -> 0).
 import { INTERESTS } from '../data/seed-listings.js'
 
 const props = defineProps({
@@ -44,9 +44,9 @@ function toggle(slug) {
       :aria-label="weighted ? `${i.label}: ${level(i.slug) === 1 ? 'love' : level(i.slug) > 0 ? 'like' : 'not set'}` : i.label"
       @click="toggle(i.slug)"
     >
-      <span v-if="weighted && level(i.slug) === 1" aria-hidden="true" class="pip">++</span>
-      <span v-else-if="weighted && level(i.slug) > 0" aria-hidden="true" class="pip">+</span>
       {{ i.label }}
+      <span v-if="weighted && level(i.slug) === 1" aria-hidden="true" class="pip">Love</span>
+      <span v-else-if="weighted && level(i.slug) > 0" aria-hidden="true" class="pip">Like</span>
     </button>
   </div>
 </template>
@@ -54,5 +54,5 @@ function toggle(slug) {
 <style scoped>
 .chip.like[aria-pressed='true'] { background: var(--mustard-soft); color: var(--ink); border-color: var(--mustard); }
 .chip.love[aria-pressed='true'] { background: var(--tomato); color: var(--on-accent); border-color: var(--line-strong); }
-.pip { font-weight: 800; font-size: 0.78rem; }
+.pip { margin-left: 6px; padding: 1px 7px; border-radius: 999px; background: color-mix(in srgb, currentColor 16%, transparent); font-weight: 800; font-size: 0.72rem; letter-spacing: 0.02em; }
 </style>

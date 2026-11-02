@@ -13,8 +13,10 @@ function snap5(v) {
   const total = Math.min(23 * 60 + 55, Math.round((Number(m[1]) * 60 + Number(m[2])) / 5) * 5)
   return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`
 }
-const props = defineProps({ hangoutId: { type: String, required: true }, manual: Boolean, disabled: Boolean })
-const emit = defineEmits(['added'])
+// `draft` is what the parent kept from an earlier visit ({ form, query, checked }); every change is sent back through
+// `draft` so closing the dialog or switching tabs does not lose it. `beforeAdd` may veto the add (confirmed plans ask first).
+const props = defineProps({ hangoutId: { type: String, required: true }, manual: Boolean, disabled: Boolean, draft: { type: Object, default: null }, beforeAdd: { type: Function, default: null } })
+const emit = defineEmits(['added', 'draft'])
 const query = ref(''), results = ref([]), loading = ref(false), error = ref(''), saving = ref(false)
 const form = ref(null), checked = ref(null), checking = ref(false), addresses = ref([]), locating = ref(false), autoLocating = ref(false)
 const POSTAL_CODE = /\b\d{6}\b/
@@ -23,7 +25,13 @@ const LOCATE_DOWN = 'Address lookup is unavailable right now. Try again shortly,
 const lookup = async q => (await geocode(q)) || []
 let timer, controller, sequence = 0, previewSequence = 0, locateSequence = 0
 const blank = () => ({ name: '', address: '', lat: '', lng: '', durationMins: 60, kind: 'activity', opens: '', closes: '', provider: 'manual', providerId: '', website: '', openingHoursText: '' })
-watch(() => props.manual, value => { if (value) form.value = blank(); else form.value = null; error.value = ''; results.value = []; addresses.value = []; locating.value = false; ++locateSequence; controller?.abort(); ++sequence; clearTimeout(timer); loading.value = false }, { immediate: true })
+let restoring = props.draft
+watch(() => props.manual, value => { if (restoring?.form) form.value = { ...blank(), ...restoring.form }; else if (value) form.value = blank(); else form.value = null; error.value = ''; results.value = []; addresses.value = []; locating.value = false; ++locateSequence; controller?.abort(); ++sequence; clearTimeout(timer); loading.value = false }, { immediate: true })
+if (restoring) {
+  query.value = restoring.query || ''; checked.value = restoring.checked || null
+  if (!restoring.form && query.value.trim().length >= 3) nextTick(search)
+  restoring = null
+}
 function cancelSearch() { controller?.abort(); controller = new AbortController(); return { signal: controller.signal, ticket: ++sequence } }
 async function search() {
   clearTimeout(timer)
@@ -55,6 +63,9 @@ async function choose(place) {
   results.value = []
 }
 watch(form, () => { checked.value = null; ++previewSequence }, { deep: true })
+watch([form, query, checked], () => {
+  emit('draft', form.value || query.value ? { form: form.value ? { ...form.value } : null, query: query.value, checked: checked.value } : null)
+}, { deep: true })
 const usableCoordinates = computed(() => form.value && form.value.lat !== '' && form.value.lng !== '' && Number.isFinite(Number(form.value.lat)) && Number.isFinite(Number(form.value.lng)))
 const markers = computed(() => usableCoordinates.value ? [{ id: 'custom', lat: Number(form.value.lat), lng: Number(form.value.lng), title: form.value.name, label: '1' }] : [])
 const reportedHours = computed(() => (form.value?.openingHoursText || '').replace(/\bMo\b/g, 'Mon').replace(/\bTu\b/g, 'Tue').replace(/\bWe\b/g, 'Wed').replace(/\bTh\b/g, 'Thu').replace(/\bFr\b/g, 'Fri').replace(/\bSa\b/g, 'Sat').replace(/\bSu\b/g, 'Sun').replace(/\boff\b/g, 'closed').replace(/;/g, '; '))
@@ -110,6 +121,7 @@ async function add() {
   saving.value = true; error.value = ''
   try {
     if (!(await ensureCoordinates())) return
+    if (props.beforeAdd && !(await props.beforeAdd())) return
     const place = await addCustomStop(props.hangoutId, { ...form.value })
     emit('added', place)
   }

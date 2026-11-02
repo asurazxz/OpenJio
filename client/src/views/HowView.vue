@@ -1,9 +1,19 @@
 <script setup>
 import { ref, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
+import { session } from '../api/index.js'
 import { vReveal } from '../composables/useReveal.js'
 import { runItineraryEvaluation, runSlotEvaluation } from '../lib/algo/evaluate.js'
 import { WEIGHTS } from '../lib/algo/itinerary.js'
 import { fmtRange } from '../lib/time.js'
+
+// Offer a way back to the plan only when the visitor came from one (router history, or the referrer on a fresh load).
+const router = useRouter()
+const fromHangout = (() => {
+  const back = router.options.history.state?.back
+  if (typeof back === 'string') return back.startsWith('/h/') ? back.split(/[?#]/)[0] : ''
+  try { const p = new URL(document.referrer).pathname; return p.startsWith('/h/') ? p : '' } catch { return '' }
+})()
 
 // As on the landing page: starting states apply only after mount, so content shows without JS.
 const ready = ref(false)
@@ -166,10 +176,32 @@ const better = (a, b, higher = true) => a != null && b != null && (higher ? a > 
       </ul>
       <p class="small muted mb-0">Public APIs: OneMap, NEA weather via data.gov.sg, and Geoapify place search with OpenStreetMap data.</p>
     </section>
+
+    <section v-reveal class="how-cta card-x" aria-labelledby="how-cta-h">
+      <div>
+        <h2 id="how-cta-h" class="h3">{{ session.userId ? 'Ready to plan one?' : 'Try it with your own group' }}</h2>
+        <p class="muted mb-0">{{ session.userId ? 'Start a jio and send one link to everyone.' : 'Make an account to start a jio, or look around the map first.' }}</p>
+      </div>
+      <div class="how-cta-actions">
+        <template v-if="session.userId">
+          <RouterLink to="/new" class="btn btn-primary">Create a jio</RouterLink>
+          <RouterLink v-if="fromHangout" :to="fromHangout" class="btn btn-secondary">Back to your plan</RouterLink>
+          <RouterLink v-else to="/" class="btn btn-secondary">Back to Home</RouterLink>
+        </template>
+        <template v-else>
+          <RouterLink :to="{ name: 'signin', query: { mode: 'signup' } }" class="btn btn-primary">Get started</RouterLink>
+          <RouterLink to="/discover" class="btn btn-secondary">Explore the map</RouterLink>
+        </template>
+      </div>
+    </section>
   </div>
 </template>
 
 <style scoped>
+.how-cta { margin-top: 24px; padding: 22px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px 24px; }
+.how-cta h2 { margin: 0 0 4px; }
+.how-cta-actions { display: flex; flex-wrap: wrap; gap: 12px; }
+@media (max-width: 575.98px) { .how-cta-actions { width: 100%; } .how-cta-actions .btn { flex: 1 1 auto; } }
 .journey-heading { margin: 0 0 24px; }
 .steps-grid { display: grid; gap: 18px; }
 .story-step { padding: 22px; min-width: 0; }

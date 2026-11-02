@@ -19,6 +19,7 @@ const days = computed(() => (h.value.dateFrom ? dateKeysBetween(h.value.dateFrom
 
 const mine = ref(props.detail.myAvailability.map((i) => ({ start: i.start, end: i.end })))
 const dirty = ref(false)
+const grid = ref(null)
 const saving = ref(false)
 watch(
   () => props.detail.myAvailability,
@@ -161,16 +162,18 @@ const replySummary = computed(() => {
   return parts.join('. ')
 })
 const memberTitle = (m) => `${memberName(m)}${m.required ? ', required' : ''}, ${m.respondedAt ? 'replied' : 'not replied yet'}`
-async function save() {
+async function save(message) {
   saving.value = true
   try {
     await saveAvailability(h.value.id, mine.value, 'grid')
     dirty.value = false
-    toast(mine.value.length ? 'Free times saved' : 'Saved: you are not free in this range')
+    toast(typeof message === 'string' ? message : mine.value.length ? 'Free times saved' : 'Saved: you are not free in this range')
     view.value = 'group'
     reload()
+    return true
   } catch (e) {
     toastError(e)
+    return false
   } finally {
     saving.value = false
   }
@@ -184,8 +187,26 @@ async function clearMine() {
     toastError(e)
   }
 }
+// Locking uses the saved availability, so unsaved edits are resolved first: saving can change the ranked list.
+async function resolveUnsaved() {
+  const choice = await confirmDialog({
+    title: 'Save your free times first?',
+    message: 'You have free times marked but not saved. Locking uses your saved times, and saving may change the best times.',
+    confirmLabel: 'Save and review times',
+    extraLabel: 'Discard edits and lock',
+    cancelLabel: 'Keep editing',
+  })
+  if (choice === 'extra') {
+    mine.value = props.detail.myAvailability.map((i) => ({ start: i.start, end: i.end }))
+    dirty.value = false
+    return true
+  }
+  if (choice === true && await save('Free times saved. The best times may have changed, so review them before locking.')) closeAdjust()
+  return false
+}
 async function lock(slot) {
   if (lockingId.value) return
+  if (dirty.value && !(await resolveUnsaved())) return
   lockingId.value = slot.id || `${slot.start}:${slot.end}`
   try {
     await lockSlot(h.value.id, { start: slot.start, end: slot.end })
@@ -246,15 +267,17 @@ async function unlock() {
         <section class="col-lg-7" :class="{ 'd-none d-lg-block': view !== 'mine' }" aria-labelledby="mine-h">
           <div class="card-x">
             <h3 id="mine-h" class="m-0">Mark free times</h3>
-            <p class="small muted mb-3">Mark the hours you are free and willing to go out. Blank means no answer, not busy.</p>
-            <AvailabilityGrid :days="days" :model-value="mine" label="Your free times" @update:model-value="onEdit" />
-            <div class="save-bar">
+            <p class="small muted mb-3">Mark every time you can make it. After you save, unmarked times count as busy.</p>
+            <AvailabilityGrid ref="grid" :days="days" :model-value="mine" label="Your free times" @update:model-value="onEdit" />
+            <div class="save-bar" :class="{ unsaved: dirty }">
               <span class="small save-state" :class="{ dirty }" role="status">
                 <span class="dot" aria-hidden="true"></span>
-                {{ totalMins ? `${fmtDuration(totalMins)} marked` : 'Nothing marked yet' }}<template v-if="dirty">, not saved yet</template><template v-else-if="detail.me.respondedAt">, saved</template>
+                <template v-if="dirty">Unsaved changes · {{ totalMins ? fmtDuration(totalMins) : 'nothing' }} marked</template>
+                <template v-else>{{ totalMins ? `${fmtDuration(totalMins)} marked` : 'Nothing marked yet' }}<template v-if="detail.me.respondedAt">, saved</template></template>
               </span>
               <div class="d-flex gap-2">
-                <button v-if="detail.me.respondedAt" type="button" class="btn btn-ghost btn-sm" @click="clearMine">Withdraw</button>
+                <button v-if="dirty" type="button" class="btn btn-ghost btn-sm" :disabled="!grid?.canUndo" @click="grid.undo()">Undo last change</button>
+                <button v-if="detail.me.respondedAt && !dirty" type="button" class="btn btn-ghost btn-sm" @click="clearMine">Withdraw</button>
                 <button type="button" class="btn btn-primary btn-sm" :disabled="saving || (!dirty && detail.me.respondedAt)" @click="save">
                   <span v-if="saving" class="spinner-border spinner-border-sm" aria-hidden="true"></span>
                   {{ detail.me.respondedAt ? (dirty ? 'Save changes' : 'Saved') : 'Save my times' }}
@@ -388,6 +411,19 @@ async function unlock() {
 .seg button.on { background: var(--card); color: var(--ink); box-shadow: var(--shadow-soft); }
 .count { margin-left: 6px; background: var(--tomato); color: var(--on-accent); border-radius: 999px; padding: 0 7px; font-size: 0.75rem; }
 .save-bar { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 14px; padding-top: 12px; border-top: 1.5px dashed var(--line); flex-wrap: wrap; }
+/* While there are unsaved edits the bar sticks to the bottom of the screen, inside the card, so Save is always in reach. */
+.save-bar.unsaved {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  margin: 14px -18px -18px;
+  padding: 12px 18px;
+  background: var(--card);
+  border-top: 1.5px solid var(--line-strong);
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+  box-shadow: 0 -8px 18px rgba(var(--oj-shadow-rgb), 0.08);
+}
+@media (max-width: 767.98px) { .save-bar.unsaved { bottom: calc(68px + env(safe-area-inset-bottom)); } }
 .save-state { display: inline-flex; align-items: center; gap: 8px; color: var(--ink-2); font-weight: 600; }
 .save-state .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--teal); }
 .save-state.dirty .dot { background: var(--mustard); }

@@ -9,6 +9,8 @@ const props = defineProps({
   title: { type: String, required: true },
   wide: { type: Boolean, default: false },
   sheet: { type: Boolean, default: false },
+  // Optional check before the dialog is dismissed by Escape, the backdrop or the close button. Return false to stay open.
+  beforeClose: { type: Function, default: null },
 })
 const emit = defineEmits(['close'])
 const el = ref(null)
@@ -21,17 +23,34 @@ function sync() {
 watch(() => props.open, sync)
 onMounted(sync)
 
+let closing = false
+async function requestClose() {
+  if (closing) return
+  closing = true
+  try {
+    if (props.beforeClose && (await props.beforeClose()) === false) return
+    emit('close')
+  } finally {
+    closing = false
+  }
+}
 function onClick(e) {
-  if (e.target === el.value) emit('close')
+  if (e.target === el.value) requestClose()
+}
+// Escape: hold the dialog open and let the check decide.
+function onCancel(e) {
+  if (!props.beforeClose) return
+  e.preventDefault()
+  requestClose()
 }
 </script>
 
 <template>
-  <dialog ref="el" class="dlg" :class="{ wide, sheet }" :aria-label="title" @close="emit('close')" @click="onClick">
+  <dialog ref="el" class="dlg" :class="{ wide, sheet }" :aria-label="title" @close="emit('close')" @cancel="onCancel" @click="onClick">
     <div class="dlg-body">
       <header class="dlg-head">
         <h2 class="h3 m-0">{{ title }}</h2>
-        <button type="button" class="btn btn-ghost btn-sm close" aria-label="Close" @click="emit('close')">
+        <button type="button" class="btn btn-ghost btn-sm close" aria-label="Close" @click="requestClose">
           <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" /></svg>
         </button>
       </header>

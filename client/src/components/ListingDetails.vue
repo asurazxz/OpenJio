@@ -20,7 +20,7 @@ const sourceText = computed(() => (props.listing.source?.kind === 'osm' ? 'OpenS
 
 <template>
   <article class="listing-details">
-    <p v-if="listing.routeReady === false && !listing.autoPublished" class="notice small">This listing is available to browse, but its visit details are incomplete. It can be saved to a shortlist; it cannot yet be added as an itinerary stop.</p>
+    <p v-if="listing.routeReady === false && !listing.autoPublished" class="notice small">This listing is available to browse, but its visit details are incomplete. It can be suggested to a jio; it cannot yet be added as an itinerary stop.</p>
     <p v-if="listing.autoPublished" class="auto-note small">
       Read automatically from a public post by {{ listing.source?.name || 'a public source' }}. Check the original before you go.
       <span v-if="listing.autoNote">{{ listing.autoNote }}</span>
@@ -77,7 +77,7 @@ const sourceText = computed(() => (props.listing.source?.kind === 'osm' ? 'OpenS
 
     <p v-if="listing.sample" class="sample-note">Sample listing. Hours and prices are approximate; event and deal names are made up.</p>
     <footer v-if="listing.autoPublished" class="detail-actions"><span class="small muted">This one is view-only, so it can’t be added to a plan. Check the original post for details.</span><a :href="listing.source?.url" target="_blank" rel="noopener noreferrer" class="btn btn-primary">View original post</a></footer>
-    <footer v-else class="detail-actions"><span class="small muted">{{ listing.type === 'hangout' ? 'See the plan and who is going.' : 'Save this idea to a plan’s shortlist. It does not make a booking.' }}</span><button type="button" class="btn btn-primary" @click="$emit('add')">{{ listing.type === 'hangout' ? 'View Open Jio' : 'Add to a plan' }}</button></footer>
+    <footer v-else class="detail-actions"><span class="small muted">{{ listing.type === 'hangout' ? 'See the plan and who is in.' : 'Suggest this idea to a jio. The host can add it to the plan. It does not make a booking.' }}</span><button type="button" class="btn btn-primary" @click="$emit('add')">{{ listing.type === 'hangout' ? 'View Open Jio' : 'Suggest for a jio' }}</button></footer>
   </article>
 </template>
 

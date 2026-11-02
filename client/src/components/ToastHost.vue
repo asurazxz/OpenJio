@@ -1,11 +1,14 @@
 <script setup>
-import { toasts } from '../lib/toast.js'
+import { toasts, dismissToast } from '../lib/toast.js'
 </script>
 
 <template>
   <div class="toast-host" role="status" aria-live="polite">
     <TransitionGroup name="toast">
-      <div v-for="t in toasts" :key="t.id" class="toast-x" :class="t.tone">{{ t.message }}</div>
+      <div v-for="t in toasts" :key="t.id" class="toast-x" :class="[t.tone, { 'has-action': t.action }]">
+        <span>{{ t.message }}</span>
+        <button v-if="t.action" type="button" class="toast-act" @click="dismissToast(t.id); t.action.run()">{{ t.action.label }}</button>
+      </div>
     </TransitionGroup>
   </div>
 </template>
@@ -33,7 +36,21 @@ import { toasts } from '../lib/toast.js'
   font-size: 0.93rem;
   box-shadow: var(--shadow-soft);
 }
-.toast-x.danger { background: var(--danger); color: #fff; }
+.toast-x.has-action { display: flex; align-items: center; justify-content: space-between; gap: 12px; pointer-events: auto; }
+.toast-act {
+  flex: none;
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1.5px solid currentColor;
+  border-radius: 999px;
+  background: none;
+  color: inherit;
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+.toast-act:hover { background: color-mix(in srgb, currentColor 16%, transparent); }
+.toast-act:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+.toast-x.danger { background: var(--oj-toast-danger-bg); color: var(--oj-toast-danger-fg); }
 .toast-enter-active, .toast-leave-active { transition: all 0.2s var(--ease); }
 .toast-enter-from, .toast-leave-to { opacity: 0; transform: translateY(8px); }
 @media (min-width: 768px) {

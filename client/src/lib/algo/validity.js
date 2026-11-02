@@ -35,9 +35,9 @@ export function isDealValidDuring(validity, startMs, endMs) {
   return true
 }
 
-/** A deal counts as verified only when its source has a verification time and it is published. */
+/** A deal counts as source-checked only when its source has a check time and it is published. Sample data never counts. */
 export function isVerifiedDeal(listing) {
-  return listing.type === 'deal' && listing.routeReady !== false && Boolean(listing.source?.verifiedAt) && listing.status !== 'draft'
+  return listing.type === 'deal' && listing.source?.kind !== 'curated' && listing.routeReady !== false && Boolean(listing.source?.verifiedAt) && listing.status !== 'draft'
 }
 
 /**

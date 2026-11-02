@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, watch, onBeforeUnmount } from 'vue'
+import { ref, computed, watch, nextTick, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { createHangout, getHangout, currentUser, AREAS } from '../api/index.js'
 import InterestPicker from '../components/InterestPicker.vue'
@@ -72,7 +72,7 @@ const form = ref({
   capacity: 6,
   description: '',
 })
-// "Jio again" (?again=<id>): start from a past hangout's name, vibe and start point. People are not
+// "Reuse details" (?again=<id>): start from a past hangout's name, vibe and start point. People are not
 // carried over; the new invite link goes to the group as usual.
 const again = ref(null)
 const againId = typeof route.query.again === 'string' ? route.query.again : ''
@@ -91,7 +91,7 @@ if (againId) {
     } else if (sa) {
       form.value.area = null
       form.value.startArea = { label: sa.label, lat: sa.lat, lng: sa.lng }
-      query.value = sa.label
+      query.value = ''
     }
     originalForm = JSON.stringify(form.value)
   }).catch(() => { /* an unreadable hangout just means a blank form */ })
@@ -134,23 +134,41 @@ function validate(upTo = STEPS.length - 1) {
 function focusInvalid() {
   requestAnimationFrame(() => document.querySelector('.is-invalid')?.focus())
 }
-function focusStep() {
-  requestAnimationFrame(() => stepHeading.value?.focus())
+// Focus moves to the new step's heading once the step has finished transitioning in, never before: the old
+// content is still on screen until then, and a repeated Enter must not act on a button that just changed.
+let pendingFocus = null
+let settleTimer
+const settling = ref(false)
+let lastKeyAt = 0
+function moveTo(i, focus = 'heading') {
+  if (i === step.value) return focus === 'invalid' ? focusInvalid() : stepHeading.value?.focus()
+  pendingFocus = focus
+  settling.value = true
+  clearTimeout(settleTimer)
+  settleTimer = setTimeout(onStepEntered, 700) // safety net if the transition is interrupted
+  step.value = i
 }
+function onStepEntered() {
+  clearTimeout(settleTimer)
+  settling.value = false
+  const focus = pendingFocus
+  pendingFocus = null
+  if (focus === 'invalid') document.querySelector('.is-invalid')?.focus()
+  else if (focus) stepHeading.value?.focus()
+}
+function focusStep() {
+  nextTick(() => stepHeading.value?.focus())
+}
+onBeforeUnmount(() => clearTimeout(settleTimer))
 function next() {
   if (!validate(step.value)) return focusInvalid()
-  step.value = Math.min(step.value + 1, STEPS.length - 1)
-  focusStep()
+  moveTo(Math.min(step.value + 1, STEPS.length - 1))
 }
 function back() {
-  step.value = Math.max(0, step.value - 1)
-  focusStep()
+  moveTo(Math.max(0, step.value - 1))
 }
 function goTo(i) {
-  if (i < step.value) {
-    step.value = i
-    focusStep()
-  }
+  if (i < step.value) moveTo(i)
 }
 const areaName = computed(() => form.value.startArea?.label || AREAS.find((a) => a.slug === form.value.area)?.label || '')
 
@@ -169,7 +187,13 @@ function pickPlace(p) {
   if (!label) return
   form.value.area = null
   form.value.startArea = { label, lat: Number(p.lat), lng: Number(p.lng) }
-  query.value = label
+  query.value = ''
+  closeList()
+}
+function clearStart() {
+  form.value.startArea = null
+  form.value.area = 'city-hall'
+  query.value = ''
   closeList()
 }
 function closeList() {
@@ -177,15 +201,12 @@ function closeList() {
   results.value = []; searching.value = false; searchError.value = ''; active.value = -1; listOpen.value = false
 }
 function onQuery() {
-  // Typing again drops a previously chosen place until a new one is picked.
-  if (form.value.startArea && query.value !== form.value.startArea.label) {
-    form.value.startArea = null
-    form.value.area = 'city-hall'
-  }
+  // Typing only changes the search text. The confirmed start point stays until a new result or a
+  // popular area is picked, or it is cleared with the × button.
   clearTimeout(timer); controller?.abort(); ++sequence
   results.value = []; searchError.value = ''; active.value = -1
   const q = query.value.trim()
-  if (q.length < 3 || form.value.startArea) { searching.value = false; listOpen.value = false; return }
+  if (q.length < 3) { searching.value = false; listOpen.value = false; return }
   searching.value = true; listOpen.value = true
   timer = setTimeout(runSearch, 400)
 }
@@ -255,11 +276,13 @@ async function shareLink() {
 }
 
 async function submit() {
+  // A key held down or pressed again while the new step is still sliding in must not skip ahead or create the plan.
+  if (settling.value && Date.now() - lastKeyAt < 600) return
   if (step.value < STEPS.length - 1) return next()
+  if (submitting.value) return
   if (!validate()) {
-    const firstBad = errors.value.title ? 0 : 1
-    step.value = firstBad
-    return focusInvalid()
+    moveTo(errors.value.title ? 0 : 1, 'invalid')
+    return
   }
   submitting.value = true
   try {
@@ -343,10 +366,10 @@ async function submit() {
         </li>
       </ol>
 
-      <form data-tour="create-form" class="card-x form-card" novalidate @submit.prevent="submit">
-        <Transition name="oj-step" mode="out-in">
+      <form data-tour="create-form" class="card-x form-card" novalidate @keydown.enter.space="lastKeyAt = Date.now()" @submit.prevent="submit">
+        <Transition name="oj-step" mode="out-in" @after-enter="onStepEntered">
           <div v-if="step === 0" key="what">
-            <h2 ref="stepHeading" tabindex="-1" class="step-title">What's the plan?</h2>
+            <h2 ref="stepHeading" tabindex="-1" class="step-title"><span class="visually-hidden">Step 1 of {{ STEPS.length }}: </span>What's the plan?</h2>
             <fieldset class="mb-4">
               <legend class="form-label">Who is it for?</legend>
               <div class="modes" role="radiogroup">
@@ -357,10 +380,10 @@ async function submit() {
               </div>
             </fieldset>
 
-            <p v-if="again && mode === 'group'" class="again-hint small" role="note">Send the new invite link to the same group.</p>
+            <p v-if="again && mode === 'group'" class="again-hint small" role="note">Details copied. Invite your friends again with the new link.</p>
             <div class="mb-4">
               <label for="title" class="form-label">Name</label>
-              <input id="title" v-model="form.title" class="form-control" :class="{ 'is-invalid': errors.title }" :placeholder="placeholder" maxlength="60" autocomplete="off" :aria-describedby="errors.title ? 'title-err' : undefined" />
+              <input id="title" v-model="form.title" class="form-control" :class="{ 'is-invalid': errors.title }" :placeholder="placeholder" maxlength="60" autocomplete="off" :aria-invalid="errors.title ? 'true' : undefined" :aria-describedby="errors.title ? 'title-err' : undefined" />
               <div v-if="errors.title" id="title-err" class="invalid-feedback d-block">{{ errors.title }}</div>
             </div>
 
@@ -380,21 +403,21 @@ async function submit() {
           </div>
 
           <div v-else-if="step === 1" key="when">
-            <h2 ref="stepHeading" tabindex="-1" class="step-title">When?</h2>
+            <h2 ref="stepHeading" tabindex="-1" class="step-title"><span class="visually-hidden">Step 2 of {{ STEPS.length }}: </span>When?</h2>
             <div v-if="mode === 'group'" class="mb-2">
               <span class="form-label d-block" id="dates-label">Which days could work?</span>
               <div class="row g-2" role="group" aria-labelledby="dates-label">
                 <div class="col-6">
                   <label for="from" class="small muted">From</label>
-                  <input id="from" v-model="form.dateFrom" type="date" class="form-control" :class="{ 'is-invalid': errors.dates }" :min="minDate" />
+                  <input id="from" v-model="form.dateFrom" type="date" class="form-control" :class="{ 'is-invalid': errors.dates }" :min="minDate" :aria-invalid="errors.dates ? 'true' : undefined" :aria-describedby="errors.dates ? 'dates-err' : 'dates-help'" />
                 </div>
                 <div class="col-6">
                   <label for="to" class="small muted">To</label>
-                  <input id="to" v-model="form.dateTo" type="date" class="form-control" :class="{ 'is-invalid': errors.dates }" :min="form.dateFrom || minDate" />
+                  <input id="to" v-model="form.dateTo" type="date" class="form-control" :class="{ 'is-invalid': errors.dates }" :min="form.dateFrom || minDate" :aria-invalid="errors.dates ? 'true' : undefined" :aria-describedby="errors.dates ? 'dates-err' : 'dates-help'" />
                 </div>
               </div>
-              <div v-if="errors.dates" class="invalid-feedback d-block">{{ errors.dates }}</div>
-              <div v-else class="form-text">Up to 7 days. Let's see who's free inside this range.</div>
+              <div v-if="errors.dates" id="dates-err" class="invalid-feedback d-block">{{ errors.dates }}</div>
+              <div v-else id="dates-help" class="form-text">Up to 7 days. Let's see who's free inside this range.</div>
             </div>
 
             <div v-else class="mb-2">
@@ -402,23 +425,23 @@ async function submit() {
               <div class="row g-2" role="group" aria-labelledby="time-label">
                 <div class="col-12 col-sm-5">
                   <label for="day" class="small muted">Day</label>
-                  <input id="day" v-model="form.day" type="date" class="form-control" :class="{ 'is-invalid': errors.time }" :min="minDate" />
+                  <input id="day" v-model="form.day" type="date" class="form-control" :class="{ 'is-invalid': errors.time }" :min="minDate" :aria-invalid="errors.time ? 'true' : undefined" :aria-describedby="errors.time ? 'time-err' : undefined" />
                 </div>
                 <div class="col-6 col-sm-3 offset-sm-1">
                   <label for="st" class="small muted">From</label>
-                  <input id="st" v-model="form.startTime" type="time" step="300" class="form-control" :class="{ 'is-invalid': errors.time }" @change="snapTime('startTime')" />
+                  <input id="st" v-model="form.startTime" type="time" step="300" class="form-control" :class="{ 'is-invalid': errors.time }" :aria-invalid="errors.time ? 'true' : undefined" :aria-describedby="errors.time ? 'time-err' : undefined" @change="snapTime('startTime')" />
                 </div>
                 <div class="col-6 col-sm-3">
                   <label for="et" class="small muted">Until</label>
-                  <input id="et" v-model="form.endTime" type="time" step="300" class="form-control" :class="{ 'is-invalid': errors.time }" @change="snapTime('endTime')" />
+                  <input id="et" v-model="form.endTime" type="time" step="300" class="form-control" :class="{ 'is-invalid': errors.time }" :aria-invalid="errors.time ? 'true' : undefined" :aria-describedby="errors.time ? 'time-err' : undefined" @change="snapTime('endTime')" />
                 </div>
               </div>
-              <div v-if="errors.time" class="invalid-feedback d-block">{{ errors.time }}</div>
+              <div v-if="errors.time" id="time-err" class="invalid-feedback d-block">{{ errors.time }}</div>
             </div>
           </div>
 
           <div v-else-if="step === 2" key="where">
-            <h2 ref="stepHeading" tabindex="-1" class="step-title">Where to start?</h2>
+            <h2 ref="stepHeading" tabindex="-1" class="step-title"><span class="visually-hidden">Step 3 of {{ STEPS.length }}: </span>Where to start?</h2>
             <div class="mb-4">
               <label for="start" class="form-label">Start point</label>
               <div class="start-search">
@@ -449,7 +472,11 @@ async function submit() {
               <p v-if="searching" class="form-text mb-0" role="status">Looking up places…</p>
               <p v-else-if="searchError" class="form-text text-danger mb-0" role="alert">{{ searchError }}</p>
               <p v-else-if="listOpen && !results.length && query.trim().length >= 3" class="form-text mb-0" role="status">No matches. Try another name or pick a popular area.</p>
-              <p v-else-if="form.startArea" class="form-text mb-0" role="status">Starting around {{ form.startArea.label }}.</p>
+
+              <p class="start-chosen mt-2 mb-0" role="status">
+                <span>Start: <strong>{{ areaName }}</strong></span>
+                <button v-if="form.startArea" type="button" class="start-clear" @click="clearStart"><span aria-hidden="true">×</span><span class="visually-hidden">Clear start point {{ form.startArea.label }}</span></button>
+              </p>
 
               <div id="areas-label" class="small-caps mt-3 mb-2">Popular areas</div>
               <div class="chip-row" role="group" aria-labelledby="areas-label">
@@ -477,7 +504,7 @@ async function submit() {
           </div>
 
           <div v-else key="review">
-            <h2 ref="stepHeading" tabindex="-1" class="step-title">Looks right?</h2>
+            <h2 ref="stepHeading" tabindex="-1" class="step-title"><span class="visually-hidden">Step 4 of {{ STEPS.length }}: </span>Looks right?</h2>
             <dl class="review">
               <div><dt>Name</dt><dd>{{ form.title }}</dd><button type="button" class="btn btn-ghost btn-sm" @click="goTo(0)">Edit<span class="visually-hidden"> name</span></button></div>
               <div><dt>Type</dt><dd>{{ modes.find((m) => m.key === mode).label }}</dd><button type="button" class="btn btn-ghost btn-sm" @click="goTo(0)">Edit<span class="visually-hidden"> type</span></button></div>
@@ -507,6 +534,10 @@ async function submit() {
 .form-card { padding: 22px; overflow: hidden; }
 .step-title { font-size: 1.35rem; margin: 0 0 18px; }
 .step-title:focus { outline: none; }
+.start-chosen { display: inline-flex; align-items: center; gap: 6px; padding: 6px 8px 6px 12px; border-radius: 999px; background: var(--teal-soft); color: var(--teal-ink); font-size: 0.9rem; }
+.start-chosen:not(:has(.start-clear)) { padding-right: 12px; }
+.start-clear { display: inline-flex; align-items: center; justify-content: center; min-width: 28px; min-height: 28px; border: 0; border-radius: 999px; background: transparent; color: inherit; font-size: 1.2rem; line-height: 1; cursor: pointer; }
+.start-clear:hover { background: rgba(0, 0, 0, 0.08); }
 .again-hint { margin: -8px 0 16px; padding: 8px 12px; border-radius: 12px; background: var(--teal-soft); color: var(--teal-ink); font-weight: 600; }
 legend { font-size: 0.92rem; }
 .wizard { list-style: none; display: flex; gap: 6px; padding: 0; margin: 0 0 14px; }

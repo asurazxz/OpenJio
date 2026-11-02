@@ -14,6 +14,7 @@ watch(() => confirmState.open, async (open) => { if (open) { await nextTick(); c
     <p v-if="confirmState.message" class="confirm-msg">{{ confirmState.message }}</p>
     <div class="confirm-actions">
       <button ref="cancelBtn" type="button" class="btn btn-secondary" @click="answerConfirm(false)">{{ confirmState.cancelLabel }}</button>
+      <button v-if="confirmState.extraLabel" type="button" class="btn btn-secondary" @click="answerConfirm('extra')">{{ confirmState.extraLabel }}</button>
       <button type="button" class="btn" :class="confirmState.danger ? 'btn-danger' : 'btn-primary'" @click="answerConfirm(true)">{{ confirmState.confirmLabel }}</button>
     </div>
   </AppDialog>

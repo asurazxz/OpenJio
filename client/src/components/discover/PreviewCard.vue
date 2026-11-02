@@ -23,7 +23,7 @@ const meta = computed(() => metaLine(props.listing) || areaLabel(props.listing.a
         <button type="button" class="btn btn-ghost btn-sm" @click="$emit('details', listing)">Details</button>
         <!-- Auto-extracted listings are view-only, so they link to their source instead. -->
         <a v-if="listing.autoPublished" :href="listing.source?.url" target="_blank" rel="noopener noreferrer" class="btn btn-primary btn-sm">View post</a>
-        <button v-else type="button" class="btn btn-primary btn-sm" @click="$emit('add', listing)">{{ listing.type === 'hangout' ? 'View' : 'Add to plan' }}</button>
+        <button v-else type="button" class="btn btn-primary btn-sm" @click="$emit('add', listing)">{{ listing.type === 'hangout' ? 'View' : 'Suggest for a jio' }}</button>
     </div>
     <button type="button" class="close" aria-label="Close preview" @click="$emit('close')">
       <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" /></svg>

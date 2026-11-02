@@ -6,7 +6,7 @@ import { forecastNear } from '../../lib/weather.js'
 import { sgParts, sgDateKey, fromDateKey, fmtTime, fmtRange, DAY } from '../../lib/time.js'
 import UserAvatar from '../UserAvatar.vue'
 
-// The soonest confirmed hangout as a ticket: date stub, route strip, who is going, weather if NEA has it.
+// The soonest confirmed hangout as a ticket: date stub, route strip, who is in, weather if NEA has it.
 const props = defineProps({ hangout: { type: Object, default: null } })
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
@@ -47,10 +47,8 @@ watch([() => props.hangout?.id, () => props.hangout?.lockedSlot?.start, revision
 onBeforeUnmount(() => { seq++; controller?.abort() })
 
 const stops = computed(() => (plan.value && !plan.value.empty && !plan.value.broken ? plan.value.stops || [] : []))
-const going = computed(() => {
-  const answered = members.value.filter((m) => m.respondedAt)
-  return (answered.length ? answered : members.value).map((m) => m.user)
-})
+// All members, not only those who replied: the app records membership, not an attendance response.
+const going = computed(() => members.value.map((m) => m.user))
 </script>
 
 <template>
@@ -78,7 +76,7 @@ const going = computed(() => {
       <div class="t-meta">
         <div v-if="going.length" class="going">
           <span class="stack" aria-hidden="true"><UserAvatar v-for="u in going.slice(0, 5)" :key="u.id" :user="u" :size="28" class="stacked" /></span>
-          <span class="small fw-bold tnum">{{ going.length }} going</span>
+          <span class="small fw-bold tnum">{{ going.length }} {{ going.length === 1 ? 'member' : 'members' }}</span>
         </div>
         <p v-if="weather" class="weather small" :class="{ wet: weather.wet }">{{ weather.forecast }}</p>
       </div>

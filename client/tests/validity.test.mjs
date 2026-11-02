@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { isOpenDuring, isDealValidDuring, scheduleAt } from '../src/lib/algo/validity.js'
+import { isOpenDuring, isDealValidDuring, isVerifiedDeal, scheduleAt } from '../src/lib/algo/validity.js'
 import { sgTime, MIN } from '../src/lib/time.js'
 
 const sat = (h, m = 0) => sgTime(2026, 11, 14, h, m)
@@ -55,4 +55,11 @@ test('an unverified weekday stays unknown rather than being marked closed', () =
   const time = sgTime(2026, 11, 14, 12)
   assert.equal(isOpenDuring({ mon: [['09:00', '18:00']] }, time, time + 30 * MIN), null)
   assert.equal(isOpenDuring({ sat: [] }, time, time + 30 * MIN), false)
+})
+
+test('only real, source-checked deals count as verified; sample deals never do', () => {
+  const deal = { type: 'deal', status: 'published', source: { kind: 'scraped', verifiedAt: '2026-10-29T00:00:00Z' } }
+  assert.equal(isVerifiedDeal(deal), true)
+  assert.equal(isVerifiedDeal({ ...deal, source: { ...deal.source, kind: 'curated' } }), false)
+  assert.equal(isVerifiedDeal({ ...deal, source: { kind: 'scraped' } }), false)
 })

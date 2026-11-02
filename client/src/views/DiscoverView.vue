@@ -26,7 +26,8 @@ const q = ref(typeof route.query.q === 'string' ? route.query.q : '')
 const type = ref(typeof route.query.type === 'string' ? route.query.type : 'all')
 const picked = ref(typeof route.query.tags === 'string' ? route.query.tags.split(',').filter((x) => INTERESTS.some((i) => i.slug === x)) : [])
 const filtersOpen = ref(false)
-const forYou = ref(true)
+// Ranking by interests is on unless the URL says rank=plain, so it survives leaving and coming back.
+const forYou = ref(route.query.rank !== 'plain')
 const area = ref(typeof route.query.area === 'string' ? route.query.area : '')
 const when = ref(typeof route.query.when === 'string' ? route.query.when : typeof route.query.for === 'string' ? `h:${route.query.for}` : 'any')
 // Open Jios are picked by time and spots rather than place, so that view opens on Cards. An explicit ?view= wins.
@@ -46,14 +47,15 @@ watch(() => route.query, (query) => {
   area.value = typeof query.area === 'string' ? query.area : ''
   when.value = typeof query.when === 'string' ? query.when : typeof query.for === 'string' ? `h:${query.for}` : 'any'
   view.value = viewFor(query)
+  forYou.value = query.rank !== 'plain'
   const tags = typeof query.tags === 'string' ? query.tags.split(',').filter((x) => INTERESTS.some((i) => i.slug === x)) : []
   if (tags.join(',') !== picked.value.join(',')) picked.value = tags
 })
 watch([q, type, area, when, picked], () => { visibleCards.value = CARD_PAGE })
-watch([q, type, area, when, view, picked], () => {
+watch([q, type, area, when, view, picked, forYou], () => {
   router.replace({ query: { ...route.query, q: q.value || undefined, type: type.value !== 'all' ? type.value : undefined,
     area: area.value || undefined, when: when.value !== 'any' ? when.value : route.query.for ? 'any' : undefined,
-    view: view.value !== viewFor({ type: type.value }) ? view.value : undefined, tags: picked.value.join(',') || undefined } })
+    view: view.value !== viewFor({ type: type.value }) ? view.value : undefined, tags: picked.value.join(',') || undefined, rank: forYou.value ? undefined : 'plain' } })
 }, { deep: true })
 const filterCount = computed(() => picked.value.length + (area.value ? 1 : 0))
 
@@ -297,19 +299,32 @@ function onAdd(l) {
     return
   }
   if (!session.userId) {
-    router.push({ name: 'signin', query: { next: route.fullPath } })
+    // The listing travels with the redirect, so signing in lands back on its Suggest dialog.
+    router.push({ name: 'signin', query: { next: router.resolve({ path: route.path, query: { ...route.query, add: l.id } }).fullPath } })
     return
   }
   adding.value = l
   target.value = typeof route.query.for === 'string' ? route.query.for : activeHangouts.value[0]?.id || ''
 }
+/* Back from sign-in with ?add=<id>: reopen Suggest for that listing once the listings are in. It never saves by itself. */
+function resumeAdd() {
+  const id = route.query.add
+  if (typeof id !== 'string' || !session.userId || !listings.value || !mine.value) return
+  const l = listings.value.find((x) => x.id === id)
+  router.replace({ query: { ...route.query, add: undefined } })
+  if (l) onAdd(l)
+  else toast('That listing is no longer available', 'default', 3600)
+}
+watch([() => route.query.add, listings, mine, () => session.userId], resumeAdd, { immediate: true })
+
 async function confirmAdd() {
   if (addingBusy.value) return
   addingBusy.value = true
   try {
     await addToShortlist(target.value, adding.value.id)
     const h = activeHangouts.value.find((x) => x.id === target.value)
-    toast(`Added to the shortlist for ${h?.title}`)
+    const id = target.value
+    toast(`Suggested for ${h?.title}`, 'default', 3200, { label: 'View', run: () => router.push(`/h/${id}?tab=plan`) })
     adding.value = null
   } catch (e) {
     toastError(e)
@@ -384,7 +399,7 @@ async function confirmAdd() {
 
     <div class="d-flex justify-content-between align-items-center my-3 gap-2 flex-wrap">
       <p class="m-0 small muted" role="status">
-        {{ results.length }} {{ results.length === 1 ? 'result' : 'results' }}<template v-if="timeWindow"> that fit {{ windowText }}</template><template v-if="nearHome"> near {{ nearHome.label }}, your home area</template>
+        {{ results.length }} {{ results.length === 1 ? 'result' : 'results' }}<template v-if="timeWindow"> that fit {{ windowText }}</template><template v-if="nearHome"> near {{ nearHome.label }}, your home area</template><template v-if="user && forYou && !picked.length"> · best match for your interests</template><template v-else-if="user && !forYou"> · not personalised</template>
         <button v-if="filtered" type="button" class="btn btn-ghost btn-sm" @click="clearFilters">Clear filters</button>
       </p>
       <div class="seg" role="group" aria-label="Display" data-tour="discover-view">
@@ -460,9 +475,9 @@ async function confirmAdd() {
       <ListingDetails v-if="detail" :listing="detail" @add="onAdd(detail); detail = null" />
     </AppDialog>
 
-    <AppDialog :open="!!adding" title="Add to a plan" @close="adding = null">
+    <AppDialog :open="!!adding" title="Suggest for a jio" @close="adding = null">
       <template v-if="adding">
-        <p class="muted">Adds <strong>{{ adding.title }}</strong> to a hangout's shortlist. The host can drop it into the plan.</p>
+        <p class="muted">Suggests <strong>{{ adding.title }}</strong> to a hangout. The host can add it to the plan.</p>
         <template v-if="activeHangouts.length">
           <fieldset>
             <legend class="form-label">Which hangout?</legend>
@@ -475,10 +490,10 @@ async function confirmAdd() {
           </fieldset>
           <div class="d-flex justify-content-end gap-2 mt-3">
             <button type="button" class="btn btn-ghost" @click="adding = null">Cancel</button>
-            <button type="button" class="btn btn-primary" :disabled="!target || addingBusy" @click="confirmAdd">{{ addingBusy ? 'Adding…' : 'Add to shortlist' }}</button>
+            <button type="button" class="btn btn-primary" :disabled="!target || addingBusy" @click="confirmAdd">{{ addingBusy ? 'Suggesting…' : 'Suggest' }}</button>
           </div>
         </template>
-        <EmptyState v-else title="No active plans" body="Start a plan first, then add places to it.">
+        <EmptyState v-else title="No active plans" body="Start a plan first, then suggest places for it.">
           <RouterLink to="/new" class="btn btn-primary">New plan</RouterLink>
         </EmptyState>
       </template>
@@ -487,7 +502,6 @@ async function confirmAdd() {
 </template>
 
 <style scoped>
-.discover-page { max-width: 1480px; }
 .filters { padding: 12px 14px; }
 .f-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; }
 .search { position: relative; flex: 1 1 220px; max-width: 380px; }

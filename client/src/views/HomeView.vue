@@ -166,13 +166,13 @@ const greeting = computed(() => {
       <WeekStrip :listings="weekListings" :hangouts="mineThisWeek" />
 
       <section v-if="crews.length" class="crew" aria-labelledby="g-crew">
-        <h2 id="g-crew" class="sec-title">Your usual crew</h2>
+        <h2 id="g-crew" class="sec-title">Plan with your usual crew again</h2>
         <ul class="crew-list">
           <li v-for="c in crews" :key="c.id">
-            <RouterLink :to="{ path: '/new', query: { again: c.id } }" class="crew-pill" :aria-label="`Jio again with ${c.people.map((p) => p.name.split(' ')[0]).join(', ')}: ${c.title}`">
+            <RouterLink :to="{ path: '/new', query: { again: c.id } }" class="crew-pill" :aria-label="`Reuse details from ${c.title}, planned with ${c.people.map((p) => p.name.split(' ')[0]).join(', ')}. You invite friends again`">
               <span class="stack" aria-hidden="true"><UserAvatar v-for="p in c.people.slice(0, 4)" :key="p.id" :user="p" :size="28" class="stacked" /></span>
               <span class="c-title">{{ c.title }}</span>
-              <span class="c-go">Jio again</span>
+              <span class="c-go">Reuse details</span>
             </RouterLink>
           </li>
         </ul>

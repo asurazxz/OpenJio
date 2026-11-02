@@ -160,7 +160,7 @@ const fine = computed(() => {
           <!-- Auto-extracted listings are view-only, so they link to their source instead. -->
           <a v-if="l.autoPublished" :href="l.source?.url" target="_blank" rel="noopener noreferrer" class="btn btn-secondary btn-sm">View post</a>
           <button v-else-if="l.type === 'hangout'" type="button" class="btn btn-primary btn-sm" @click="$emit('add', l)">{{ spots === 'Full' ? 'View' : 'Join' }}</button>
-          <button v-else type="button" class="btn btn-secondary btn-sm" @click="$emit('add', l)">Add to plan</button>
+          <button v-else type="button" class="btn btn-secondary btn-sm" @click="$emit('add', l)">Suggest for a jio</button>
         </slot>
       </div>
     </div>

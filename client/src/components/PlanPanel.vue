@@ -37,8 +37,22 @@ const planIssues = computed(() => (plan.value?.issues || []).filter((i) => i.ind
 const isSoft = (i) => SOFT_ISSUES.includes(i.type)
 const voters = computed(() => props.detail.members.length)
 
+// A confirmed plan, or one that already has votes, is relied on: say what an edit does before making it.
+const hasVotes = computed(() => (plan.value?.stops || []).some((s) => s.votes.up + s.votes.down > 0))
+async function confirmChange(confirmLabel) {
+  const final = h.value.stage === 'final'
+  if (!final && !hasVotes.value) return true
+  return confirmDialog({
+    title: final ? 'Change the confirmed plan?' : 'Change the plan?',
+    message: final ? 'This reopens voting and resets votes on changed stops.' : 'Votes on changed stops will be reset.',
+    confirmLabel,
+    cancelLabel: 'Keep plan',
+    danger: true,
+  })
+}
+
 async function generate(relax = null) {
-  if (plan.value?.stops.length && !relax && !(await confirmDialog({ title: 'Replace the current plan?', message: 'Votes on changed stops will reset.', confirmLabel: 'Replace plan', danger: true }))) return
+  if (plan.value?.stops.length && !relax && !(await confirmDialog({ title: 'Replace the current plan?', message: h.value.stage === 'final' ? 'This reopens voting and resets votes on changed stops.' : 'Votes on changed stops will reset.', confirmLabel: 'Replace plan', danger: true }))) return
   busy.value = true
   problems.value = null
   try {
@@ -52,26 +66,38 @@ async function generate(relax = null) {
   }
 }
 
-async function save(next, message) {
+async function save(next, message, action = null) {
   if (saving.value || !canEdit.value) return false
   saving.value = true
   try {
     await setPlanStops(h.value.id, next)
-    if (message) toast(message)
+    if (message) toast(message, 'default', 3200, action)
     return true
   } catch (e) {
     toastError(e)
     return false
   } finally { saving.value = false }
 }
-function reorder({ from, to }) {
+async function reorder({ from, to }) {
   if (saving.value || busy.value || !canEdit.value) return
+  if (!(await confirmChange('Change order'))) return
   save(moveIndex(ids.value, from, to), 'Route order updated')
 }
-function remove(i) {
-  const next = ids.value.slice()
+async function remove(i) {
+  const before = ids.value.slice()
+  const next = before.slice()
+  const [gone] = plan.value.stops.slice(i, i + 1)
   next.splice(i, 1)
-  save(next, 'Stop removed')
+  if (h.value.stage === 'final' || hasVotes.value) {
+    if (!(await confirmChange('Remove stop'))) return
+    save(next, 'Stop removed')
+  } else if (gone?.listing.custom) {
+    // A host-added place is dropped from the plan entirely, so it cannot be restored with Undo.
+    if (!(await confirmDialog({ title: `Remove ${gone.listing.title}?`, message: 'This place was added by hand and is not kept once removed.', confirmLabel: 'Remove stop', danger: true }))) return
+    save(next, 'Stop removed')
+  } else {
+    save(next, 'Stop removed', { label: 'Undo', run: () => save(before, 'Stop restored') })
+  }
 }
 
 // The stamp only shows as selected once the store confirms the vote.
@@ -155,6 +181,7 @@ const changedTimes = computed(() => {
 async function useAlt(alt) {
   const next = ids.value.slice()
   next[swapIndex.value] = alt.listing.id
+  if (!(await confirmChange('Swap stop'))) return
   if (await save(next, `Swapped in ${alt.listing.title}`)) {
     swapIndex.value = -1
     liveMsg.value = `Swapped in ${alt.listing.title}`
@@ -180,8 +207,34 @@ async function openAdd() {
 }
 function customAdded(place) {
   toast(`Added ${place.title}`)
+  customDrafts.value = { ...customDrafts.value, [addTab.value]: null }
   addOpen.value = false
   reload()
+}
+// A custom place that is half typed survives closing the dialog and switching tabs (kept in memory for this hangout).
+const customDrafts = ref({ search: null, manual: null })
+watch(() => h.value.id, () => { customDrafts.value = { search: null, manual: null } })
+const setDraft = (tab, draft) => { customDrafts.value = { ...customDrafts.value, [tab]: draft } }
+function draftMeaningful(d) {
+  const f = d?.form
+  if (!f) return false
+  return !!(f.name?.trim() || f.address?.trim() || f.lat !== '' || f.lng !== '' || f.opens || f.closes) || Number(f.durationMins) !== 60 || f.kind !== 'activity'
+}
+// Escape, the backdrop and the close button all come through here.
+async function confirmCloseAdd() {
+  if (!Object.values(customDrafts.value).some(draftMeaningful)) return true
+  const choice = await confirmDialog({
+    title: 'Discard this place?',
+    message: 'You started adding a custom stop that is not on the route yet.',
+    confirmLabel: 'Discard',
+    cancelLabel: 'Keep editing',
+    extraLabel: 'Close, keep draft',
+    danger: true,
+  })
+  if (choice === 'extra') return true
+  if (choice !== true) return false
+  customDrafts.value = { search: null, manual: null }
+  return true
 }
 const shortlistIds = computed(() => new Set((plan.value?.shortlist || []).map((l) => l.id)))
 const addResults = computed(() => {
@@ -202,6 +255,7 @@ async function check(l) {
   } catch (e) { toastError(e) }
 }
 async function addStop(l) {
+  if (!(await confirmChange('Add stop'))) return
   if (!await save([...ids.value, l.id], `Added ${l.title}`)) return
   if (shortlistIds.value.has(l.id)) removeFromShortlist(h.value.id, l.id).catch(() => {})
   addOpen.value = false
@@ -374,6 +428,7 @@ const voteSummary = computed(() => {
           <button type="button" class="alt" :class="{ on: altPick?.listing.id === a.listing.id }" :aria-pressed="altPick?.listing.id === a.listing.id" @click="pickAlt(a)">
             <span class="d-flex gap-2 align-items-center">
               <span class="tag" :class="TYPE_TONE[a.listing.type]">{{ TYPE_LABEL[a.listing.type] }}</span>
+              <span v-if="a.listing.source?.kind === 'curated'" class="tag tag-mustard">{{ a.listing.type === 'deal' ? 'Sample deal' : 'Sample data' }}</span>
               <span v-if="a.listing.type === 'place' && !a.listing.openingHours" class="tag tag-mustard">Hours not verified</span>
             </span>
             <span class="alt-title">{{ a.listing.title }}</span>
@@ -403,11 +458,11 @@ const voteSummary = computed(() => {
       <p v-if="!isHost && alternatives?.length" class="small muted mb-0 mt-2">Vote to swap and the host will see these options.</p>
     </AppDialog>
 
-    <AppDialog :open="addOpen" title="Add a stop" wide @close="addOpen = false; previewSequence++">
+    <AppDialog :open="addOpen" title="Add a stop" wide :before-close="confirmCloseAdd" @close="addOpen = false; previewSequence++">
       <div class="d-flex flex-wrap gap-2 mb-3" role="group" aria-label="Where to find a stop">
         <button v-for="tab in [{ id: 'discover', label: 'From Discover' }, { id: 'search', label: 'Find a place' }, { id: 'manual', label: 'Enter manually' }]" :key="tab.id" type="button" class="btn btn-sm" :class="addTab === tab.id ? 'btn-primary' : 'btn-secondary'" :aria-pressed="addTab === tab.id" @click="addTab = tab.id">{{ tab.label }}</button>
       </div>
-      <CustomPlaceForm v-if="addOpen && addTab !== 'discover'" :key="addTab" :hangout-id="h.id" :manual="addTab === 'manual'" :disabled="saving || busy || !canEdit" @added="customAdded" />
+      <CustomPlaceForm v-if="addOpen && addTab !== 'discover'" :key="addTab" :hangout-id="h.id" :manual="addTab === 'manual'" :draft="customDrafts[addTab]" :before-add="() => confirmChange('Add stop')" :disabled="saving || busy || !canEdit" @draft="setDraft(addTab, $event)" @added="customAdded" />
       <template v-else-if="addTab === 'discover'">
       <div class="d-flex flex-wrap gap-2 mb-3">
         <input v-model="query" class="form-control flex-grow-1" style="min-width: 200px; width: auto" placeholder="Search by name, area or interest" aria-label="Search places" />

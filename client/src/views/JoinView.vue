@@ -108,9 +108,9 @@ async function join() {
           <div><dt>Start</dt><dd>Around {{ p.startArea.label }}</dd></div>
           <div v-if="p.interests?.length"><dt>Vibe</dt><dd>{{ p.interests.map(interestLabel).join(', ') }}</dd></div>
           <div>
-            <dt>Going</dt>
+            <dt>Who’s in</dt>
             <dd>
-              <ul class="going" aria-label="Who is going">
+              <ul class="going" aria-label="Members">
                 <li v-for="g in going" :key="g.name"><UserAvatar :user="g.user" :size="28" /><span>{{ g.name }}<span v-if="g.host" class="host-note"> (host)</span></span></li>
               </ul>
             </dd>

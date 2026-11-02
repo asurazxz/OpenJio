@@ -32,3 +32,28 @@ test('route failures are skipped rather than treated as zero minutes', () => {
   const r = joinSuggestions({ stops, from: { lat: 1.35, lng: 103.9 }, departMs: sat(13), travel: () => ({ mins: 0, mode: 'pt' }) })
   assert.equal(r.best, null)
 })
+
+test('options carry the real meeting time and the group start, separate from arrival', () => {
+  const r = joinSuggestions({ stops, from: { lat: 1.35, lng: 103.9 }, departMs: sat(13, 50), travel: fixed(30) })
+  assert.equal(r.best.arriveMs, sat(14, 20))
+  assert.equal(r.best.groupStartMs, sat(14, 45))
+  assert.equal(r.best.meetMs, sat(14, 45), 'early arrival waits for the group')
+  assert.equal(r.best.waitMins, 25)
+  assert.equal(r.best.overlapMins, 75)
+  assert.equal(r.best.untilMs, sat(16))
+})
+
+test('arriving late means meeting partway through, with no wait', () => {
+  const r = joinSuggestions({ stops, from: { lat: 1.35, lng: 103.9 }, departMs: sat(13, 0), travel: fixed(60) })
+  assert.equal(r.best.index, 0)
+  assert.equal(r.best.meetMs, sat(14))
+  assert.equal(r.best.waitMins, 0)
+  assert.equal(r.best.overlapMins, 30)
+})
+
+test('backups are ordered by meeting time and then by usable time together', () => {
+  const r = joinSuggestions({ stops, from: { lat: 1.35, lng: 103.9 }, departMs: sat(13), travel: fixed(40) })
+  const meets = r.options.map((o) => o.meetMs)
+  assert.deepEqual(meets, [...meets].sort((a, b) => a - b))
+  assert.equal(r.best, r.options[0])
+})

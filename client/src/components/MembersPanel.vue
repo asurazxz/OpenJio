@@ -100,7 +100,7 @@ const canInvite = computed(() => h.value.mode !== 'solo' && !['ended', 'cancelle
         <input id="invite" class="form-control form-control-sm" :value="link" readonly @focus="$event.target.select()" />
         <button type="button" class="btn btn-secondary btn-sm" @click="share">{{ copied ? 'Copied' : 'Share' }}</button>
       </div>
-      <p class="small muted mt-1 mb-0">People sign in to join. The link shows only the name, time and who is going.</p>
+      <p class="small muted mt-1 mb-0">People sign in to join. Anyone with this link can see the outing details, members’ first names and the plan. Individual availability stays private.</p>
       <button v-if="isHost" type="button" class="btn btn-ghost btn-sm px-0 mt-1" @click="renew">Make a new link</button>
     </template>
     <button v-if="!isHost" type="button" class="btn btn-ghost btn-sm px-0 mt-2 text-danger" @click="leave">Leave hangout</button>

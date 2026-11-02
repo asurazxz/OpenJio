@@ -301,7 +301,7 @@ export function alternativesFor(listings, index, input, k = 3) {
     const curG = groupScore(current, ctx.members)
     if (g.avg > curG.avg + 0.05) why.push('Better interest match')
     if (r.parts.travelMins < base.parts.travelMins - 4) why.push(`${base.parts.travelMins - r.parts.travelMins} min less travel`)
-    if (isVerifiedDeal(cand)) why.push('Has a verified deal')
+    if (isVerifiedDeal(cand)) why.push('Has a source-checked deal')
     if (!why.length) why.push('Fits the same time')
     options.push({ listing: cand, score: r.score, delta: Math.round((r.score - base.score) * 1000) / 1000, reasons: why })
   }
@@ -324,7 +324,7 @@ export function explain(stops, parts, ctx) {
   }
   out.push(`About ${fmtDuration(parts.travelMins)} of travel in total`)
   const deals = stops.filter((s) => isVerifiedDeal(s.listing)).length
-  if (deals) out.push(deals === 1 ? 'Includes 1 verified deal' : `Includes ${deals} verified deals`)
+  if (deals) out.push(deals === 1 ? 'Includes 1 source-checked deal' : `Includes ${deals} source-checked deals`)
   const meals = ctx.meals.filter((w) => stops.some((s) => coversMeal(s, w)))
   if (meals.length) out.push(`Covers ${meals.map((m) => m.name).join(' and ')}`)
   return out

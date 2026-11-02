@@ -23,12 +23,17 @@ export function joinSuggestions({ stops, from, departMs, travel = estimateTravel
     const leg = travel(from, stop.listing)
     if (!leg || !Number.isFinite(leg.mins) || leg.mins <= 0) return
     const arriveMs = departMs + leg.mins * MIN
-    const overlapMins = Math.round((stop.end - Math.max(arriveMs, stop.start)) / MIN)
+    // The joiner meets the group when both are at the stop: later of "you arrive" and "group starts there".
+    const meetMs = Math.max(arriveMs, stop.start)
+    const overlapMins = Math.round((stop.end - meetMs) / MIN)
     if (overlapMins < minOverlapMins) return
     options.push({
       index,
       stop,
       arriveMs,
+      meetMs,
+      groupStartMs: stop.start,
+      untilMs: stop.end,
       travelMins: leg.mins,
       travelMode: leg.mode,
       estimate: leg.estimate !== false,
@@ -40,6 +45,8 @@ export function joinSuggestions({ stops, from, departMs, travel = estimateTravel
   if (!options.length) {
     return { best: null, options, reason: 'You would not reach any remaining stop in time to spend at least ' + minOverlapMins + ' minutes with the group' }
   }
-  // Join as early in the plan as possible; the first reachable stop is the best one.
+  // Rank by when you actually meet the group, then by the time you get together (longer first).
+  options.sort((a, b) => a.meetMs - b.meetMs || b.overlapMins - a.overlapMins || a.index - b.index)
+  // Join as early in the plan as possible; the earliest meeting is the best one.
   return { best: options[0], options, reason: null }
 }

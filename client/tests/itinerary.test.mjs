@@ -119,3 +119,12 @@ test('stop times are rounded up to 5 minutes and keep their durations', () => {
   const g = generateItinerary(base)
   for (const s of g.stops) assert.equal((s.start / MIN) % 5, 0)
 })
+
+test('plan reasons call a real deal source-checked but never describe a sample deal as verified', () => {
+  const deal = (kind) => ({ id: 'deal-' + kind, type: 'deal', kind: 'activity', interests: ['museums'], durationMins: 60, status: 'published', source: { kind, verifiedAt: '2026-10-29T00:00:00Z' }, ...at(0.001, 0.001) })
+  const plan = (kind) => generateItinerary({ ...base, candidates: [...L, deal(kind)], members: [{ id: 'a', interests: { museums: 1 } }] })
+  const real = plan('scraped')
+  const sample = plan('curated')
+  if (real.stops.some((s) => s.listingId === 'deal-scraped')) assert.ok(real.reasons.some((r) => /source-checked deal/.test(r)))
+  assert.ok(!sample.reasons.some((r) => /verified|source-checked/.test(r)))
+})

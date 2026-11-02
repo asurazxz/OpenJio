@@ -84,6 +84,9 @@ function undo() {
   announce('Undone')
 }
 
+const canUndo = computed(() => history.value.length > 0)
+defineExpose({ undo, canUndo })
+
 const status = ref('')
 let statusTimer = null
 function announce(text) {
@@ -178,6 +181,15 @@ function clearShown() {
 }
 
 // Add a range by form, for anyone who prefers not to paint.
+const rangeOpen = ref(false)
+const rangeRoot = ref(null)
+async function toggleRange() {
+  rangeOpen.value = !rangeOpen.value
+  if (!rangeOpen.value) return
+  await nextTick()
+  rangeRoot.value?.scrollIntoView?.({ block: 'nearest' })
+  rangeRoot.value?.querySelector('select')?.focus({ preventScroll: true })
+}
 const rangeDay = ref(0)
 const rangeFrom = ref((props.fromHour + 10) * 60)
 const rangeTo = ref((props.fromHour + 13) * 60)
@@ -300,6 +312,7 @@ const rowTime = (m) => minText(m)
         {{ p.label }} <span class="muted fw-normal">{{ hourText(p.from) }} to {{ hourText(p.to) }}</span>
       </button>
       <button type="button" class="chip" @click="clearShown">Clear</button>
+      <button type="button" class="chip range-chip" :aria-expanded="rangeOpen" @click="toggleRange">Add a time range</button>
     </div></div>
 
     <!-- Phone: one day as a list of slots -->
@@ -387,7 +400,7 @@ const rowTime = (m) => minText(m)
       </div>
     </div>
 
-    <details v-if="!readonly" class="range">
+    <details v-if="!readonly" ref="rangeRoot" class="range" :open="rangeOpen" @toggle="rangeOpen = $event.target.open">
       <summary>Add a time range instead</summary>
       <div class="range-form">
         <div>
@@ -490,7 +503,9 @@ const rowTime = (m) => minText(m)
 /* Desktop grid */
 /* No inner scroll: the grid shows at full height and the day names stay under the app header while the
    page scrolls. A caller that puts the grid in its own scroller (the overlap dialog) sets --grid-top: 0. */
-.grid-wrap { --grid-top: var(--header-h, 0px); border-radius: 12px; }
+.grid-wrap { --grid-top: var(--header-h, 0px); --row-h: 18px; border-radius: 12px; }
+/* Roomier half-hour rows where there is a pointer and space for them. */
+@media (min-width: 992px) { .grid-wrap { --row-h: 24px; } }
 .grid {
   display: grid;
   grid-template-columns: 52px repeat(var(--cols), minmax(36px, 1fr));
@@ -511,12 +526,12 @@ const rowTime = (m) => minText(m)
   color: var(--ink-2);
   text-align: right;
   padding-right: 8px;
-  height: 18px;
+  height: var(--row-h);
   line-height: 1;
 }
 .time.hour { transform: translateY(-0.2em); }
 .cell {
-  height: 18px;
+  height: var(--row-h);
   border: 0;
   border-left: 1px solid var(--line);
   border-top: 1px dashed color-mix(in srgb, var(--line) 60%, transparent);
@@ -532,6 +547,9 @@ const rowTime = (m) => minText(m)
 .oj-slot.on:hover { background: color-mix(in srgb, var(--teal) 85%, var(--ink)); }
 .cell.on + .cell.on { border-top-color: transparent; }
 .hl { box-shadow: inset 3px 0 0 var(--tomato), inset -3px 0 0 var(--tomato); }
+/* Keep a keyboard-focused slot clear of the sticky day names above and the unsaved-changes bar below. */
+.cell { scroll-margin-top: calc(var(--grid-top) + 56px); scroll-margin-bottom: 96px; }
+.lcell { scroll-margin-bottom: 150px; }
 .oj-slot:focus-visible { outline: 3px solid var(--oj-focus); outline-offset: -3px; border-radius: 4px; position: relative; z-index: 1; }
 .heat { cursor: default; }
 

@@ -795,7 +795,7 @@ function stopReason(listing, members, names, solo) {
   if (fans.length && solo) parts.push('Matches your interests')
   else if (fans.length === members.length && members.length > 1) parts.push('Everyone is into this kind of thing')
   else if (fans.length) parts.push(`${list(fans)} ${fans.length === 1 ? 'likes' : 'like'} this kind of thing`)
-  if (isVerifiedDeal(listing)) parts.push('Has a verified deal')
+  if (isVerifiedDeal(listing)) parts.push('Has a source-checked deal')
   if (listing.type === 'event') parts.push('Only on at this time')
   return parts.length ? parts.join('. ') + '.' : 'Fits the time and keeps travel short.'
 }

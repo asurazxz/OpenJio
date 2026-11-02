@@ -26,7 +26,7 @@ test('Discover starts with an actionable map and keeps interest filters behind a
   const dialog = page.getByRole('dialog')
   await expect(dialog).toBeVisible()
   await expect(dialog.getByRole('heading', { name: 'Plan your visit' })).toBeVisible()
-  await expect(dialog.getByRole('button', { name: 'Add to a plan', exact: true })).toBeVisible()
+  await expect(dialog.getByRole('button', { name: 'Suggest for a jio', exact: true })).toBeVisible()
   await page.keyboard.press('Escape')
   await expect(dialog).toBeHidden()
 })
@@ -83,7 +83,7 @@ test('Discover caps map pins at 30 and pages Cards 24 at a time for a large cata
 })
 
 for (const [name, path] of [['Discover', '/discover'], ['Open Jios', '/discover?type=hangout&view=map']]) {
-  test(`${name} opens a preview card from a pin, with Details and Add to plan`, async ({ page }) => {
+  test(`${name} opens a preview card from a pin, with Details and Suggest for a jio`, async ({ page }) => {
     await page.goto(path)
     await expect(page.getByRole('heading', { level: 1, name, exact: true })).toBeVisible()
     const map = page.getByRole('region', { name: 'Map', exact: true })
@@ -104,7 +104,7 @@ for (const [name, path] of [['Discover', '/discover'], ['Open Jios', '/discover?
       await expect(preview).toContainText(/\d+ spots? left|Full/)
       await expect(preview.getByRole('button', { name: 'View', exact: true })).toBeVisible()
     } else {
-      await expect(preview.getByRole('button', { name: 'Add to plan', exact: true })).toBeVisible()
+      await expect(preview.getByRole('button', { name: 'Suggest for a jio', exact: true })).toBeVisible()
     }
     // Esc closes the card.
     await page.keyboard.press('Escape')

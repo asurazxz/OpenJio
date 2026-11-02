@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed } from 'vue'
-import { currentUser, updateProfile, AREAS } from '../api/index.js'
+import { currentUser, updateProfile, isDemo, AREAS } from '../api/index.js'
 import InterestPicker from '../components/InterestPicker.vue'
 import UserAvatar from '../components/UserAvatar.vue'
 import { toast, toastError } from '../lib/toast.js'
@@ -87,18 +87,18 @@ async function save() {
           <option value="">Not set</option>
           <option v-for="a in AREAS" :key="a.slug" :value="a.slug">{{ a.label }}</option>
         </select>
-        <div id="pf-area-help" class="form-text">Used as the default start area for plans made just for you.</div>
+        <div id="pf-area-help" class="form-text">Where plans made just for you start by default, and the reference point for “near” in Discover.</div>
       </div>
 
       <div class="mb-4">
         <span id="pf-interests-label" class="form-label d-block">Your interests</span>
-        <p id="pf-interests-help" class="form-text mt-0 mb-2">Tap once for like, twice for love, three times to clear.</p>
+        <p id="pf-interests-help" class="form-text mt-0 mb-2">Click once for Like, twice for Love, three times to clear.</p>
         <InterestPicker v-model="weights" weighted label="Your interests" aria-describedby="pf-interests-help" />
       </div>
 
       <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 pt-2">
         <p class="small muted m-0">
-          This is a demo account. Your interests are used to rank Discover and to balance group plans.
+          <template v-if="isDemo">This is a demo account. </template>Your interests are used to rank Discover and to balance group plans.
         </p>
         <button type="submit" class="btn btn-primary" :disabled="!canSave">
           <span v-if="saving" class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>

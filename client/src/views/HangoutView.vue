@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute, useRouter, isNavigationFailure, NavigationFailureType } from 'vue-router'
 import { getHangout, previewHangout, setStage } from '../api/index.js'
 import { toast, toastError } from '../lib/toast.js'
 import { confirmDialog } from '../lib/confirm.js'
@@ -12,6 +12,7 @@ import TimePanel from '../components/TimePanel.vue'
 import PlanPanel from '../components/PlanPanel.vue'
 import GoPanel from '../components/GoPanel.vue'
 import MembersPanel from '../components/MembersPanel.vue'
+import { canShareInvite, shareInvite } from '../lib/invite.js'
 import UserAvatar from '../components/UserAvatar.vue'
 import EmptyState from '../components/EmptyState.vue'
 
@@ -93,16 +94,39 @@ const defaultTab = () => {
   return 'plan'
 }
 const tab = ref(typeof route.query.tab === 'string' ? route.query.tab : null)
+// A ?tab= that is not one of this hangout's tabs (a typo, or Time on a fixed-time plan) falls back to
+// the default tab, and the URL is corrected without adding a history entry.
+const validTab = (t) => tabs.value.some((x) => x.key === t)
 watch(
-  () => h.value?.stage,
-  (s, prev) => {
+  [() => h.value?.stage, () => h.value?.id, () => route.query.tab],
+  ([s, , q], old) => {
+    const prev = old?.[0]
+    if (!h.value) return
     if (!tab.value || (prev && s !== prev)) tab.value = defaultTab()
+    else if (typeof q === 'string' && q !== tab.value && validTab(q)) tab.value = q
+    if (!validTab(tab.value)) tab.value = defaultTab()
+    // Keep the URL on the tab shown (a stage change moves to its default tab), so the tab buttons still navigate.
+    if (typeof q === 'string' && q !== tab.value) router.replace({ query: { ...route.query, tab: tab.value } })
   },
+  { immediate: true },
 )
+const canInvite = computed(() => canShareInvite(h.value))
+const inviteCopied = ref(false)
+async function invite() {
+  try {
+    const how = await shareInvite(h.value, { native: window.matchMedia?.('(pointer: coarse)').matches })
+    if (how === 'dismissed') return
+    inviteCopied.value = true
+    setTimeout(() => (inviteCopied.value = false), 1800)
+    toast(how === 'shared' ? 'Invite shared' : 'Invite link copied')
+  } catch {
+    toast('Copy failed. Open People and copy the link manually.', 'danger')
+  }
+}
 async function go(t) {
   // The time panel can block this when free times are unsaved.
   const failure = await router.replace({ query: { ...route.query, tab: t, created: undefined } })
-  if (!failure) tab.value = t
+  if (!failure || isNavigationFailure(failure, NavigationFailureType.duplicated)) tab.value = t
 }
 const justCreated = computed(() => route.query.created === '1')
 
@@ -133,12 +157,16 @@ function onTabKey(e, i) {
 
     <template v-else>
       <div v-if="h.mode !== 'solo'" class="people-rail">
+        <button v-if="canInvite" type="button" class="invite-btn" @click="invite">
+          <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg>
+          <span class="invite-label">{{ inviteCopied ? 'Copied' : 'Invite' }}</span>
+        </button>
         <div ref="peopleWrap" class="people-anchor" @keydown.esc="closePeople(true)">
           <button
             ref="peopleBtn"
             type="button"
             class="people-pill"
-            :aria-label="`People: ${detail.members.length} going, show details and invite link`"
+            :aria-label="`People: ${detail.members.length} ${detail.members.length === 1 ? 'member' : 'members'}, show details and invite link`"
             aria-controls="people-popover"
             :aria-expanded="String(peopleOpen)"
             @click="peopleOpen = !peopleOpen"
@@ -147,7 +175,7 @@ function onTabKey(e, i) {
               <UserAvatar v-for="m in detail.members.slice(0, 5)" :key="m.userId" :user="m.user" :size="26" />
               <span v-if="detail.members.length > 5" class="people-more">+{{ detail.members.length - 5 }}</span>
             </span>
-            <span class="people-count tnum" aria-hidden="true">{{ detail.members.length }} going</span>
+            <span class="people-count tnum" aria-hidden="true">{{ detail.members.length }} {{ detail.members.length === 1 ? 'member' : 'members' }}</span>
             <svg class="people-chev" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" /></svg>
           </button>
           <div v-if="peopleOpen" id="people-popover" class="people-pop" role="dialog" aria-label="People and invite link">
@@ -248,7 +276,24 @@ function onTabKey(e, i) {
   display: flex;
   justify-content: flex-end;
 }
+.people-rail { gap: 8px; }
 .people-anchor { position: relative; }
+.invite-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 4px 16px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--ink);
+  box-shadow: var(--shadow-soft);
+  font-weight: 700;
+  cursor: pointer;
+}
+.invite-btn:hover { background: var(--paper-2); border-color: var(--line-strong); }
+.invite-btn:focus-visible { outline: 2px solid var(--tomato); outline-offset: 2px; }
 .people-pill {
   display: inline-flex;
   align-items: center;
@@ -315,7 +360,7 @@ function onTabKey(e, i) {
 }
 .people-close:hover { color: var(--ink); background: var(--paper-2); }
 .people-close:focus-visible { outline: 2px solid var(--tomato); outline-offset: 2px; }
-.hhead-main.has-people { padding-right: 240px; }
+.hhead-main.has-people { padding-right: 340px; }
 .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin-bottom: 20px; overflow-x: auto; scrollbar-width: none; }
 .tabbtn {
   display: inline-flex;
@@ -383,10 +428,13 @@ function onTabKey(e, i) {
 @media (max-width: 575.98px) {
   .hhead { position: relative; margin-bottom: 14px; }
   .hhead-tags { margin-bottom: 6px !important; }
-  .hhead-main.has-people { padding-right: 176px; }
-  /* On a phone there is no spare margin for the pill to float in, so it stays in the header and
-     scrolls away instead of covering the content below. */
-  .people-rail { position: relative; top: auto; }
+  .hhead-main.has-people { padding-right: 0; }
+  /* Icon only on a phone; the label stays for screen readers. */
+  .invite-btn { padding: 4px 13px; }
+  .invite-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  /* On a phone there is no spare margin for the pill to float in: the pill and Invite sit in their own
+     row above the title (which keeps the full width) and scroll away with the header. */
+  .people-rail { position: relative; top: auto; height: auto; justify-content: flex-start; margin-bottom: 12px; }
   .people-pill { gap: 8px; padding-right: 12px; }
   .people-count { font-size: 0.85rem; }
   .hhead h1 { font-size: 1.5rem; line-height: 1.2; }

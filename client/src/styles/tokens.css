@@ -28,6 +28,8 @@
   --oj-mango-soft: #FDEFCB;
   --oj-pink-soft: #FCE4F1;
   --oj-error-soft: #FDE2E2;
+  --oj-toast-danger-bg: #B91C1C;
+  --oj-toast-danger-fg: #FFFFFF;
   --oj-on-fill: #26140A;
   --oj-shadow-rgb: 36, 25, 17;
 
@@ -77,6 +79,8 @@
     --oj-mango-soft: #3D3018;
     --oj-pink-soft: #43202F;
     --oj-error-soft: #45201F;
+  --oj-toast-danger-bg: #7F1D1D;
+  --oj-toast-danger-fg: #FEF2F2;
     --oj-on-fill: #1C1917;
     --oj-shadow-rgb: 0, 0, 0;
     color-scheme: dark;
@@ -109,6 +113,8 @@
   --oj-mango-soft: #3D3018;
   --oj-pink-soft: #43202F;
   --oj-error-soft: #45201F;
+  --oj-toast-danger-bg: #7F1D1D;
+  --oj-toast-danger-fg: #FEF2F2;
   --oj-on-fill: #1C1917;
   --oj-shadow-rgb: 0, 0, 0;
   color-scheme: dark;

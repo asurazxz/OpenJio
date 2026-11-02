@@ -25,7 +25,7 @@ function scrollToHow(event) {
     <section class="landing-hero" aria-labelledby="landing-heading">
       <div class="landing-copy">
         <h1 id="landing-heading" class="hero-in" style="--in-delay: 0ms"><span class="h1-lead">From <span class="q">“free this weekend?”</span></span> <span class="h1-tail">to <span class="q">“see you there.”</span></span></h1>
-        <p class="hero-in" style="--in-delay: 70ms">Discover places, find a common time, and plan your next jio.</p>
+        <p class="hero-in" style="--in-delay: 70ms">One link for everyone’s free times, votes and the final plan.</p>
         <div class="landing-actions hero-in" style="--in-delay: 140ms">
           <RouterLink :to="{ name: 'signin', query: { mode: 'signup', next: '/' } }" class="btn btn-primary">Get started</RouterLink>
           <RouterLink to="/discover" class="btn btn-secondary">Explore the map</RouterLink>

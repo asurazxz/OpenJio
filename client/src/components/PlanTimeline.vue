@@ -221,6 +221,8 @@ const TONES = ['orange', 'teal', 'mango', 'pink']
 const tone = (i) => TONES[i % TONES.length]
 const modeText = (m) => (m === 'walk' ? 'walk' : 'by MRT or bus')
 const hoursUnverified = (l) => l.type === 'place' && !l.openingHours
+// Sample listings are made-up demo data, and a sample deal is not a real offer.
+const sampleTag = (l) => (l.source?.kind !== 'curated' ? '' : l.type === 'deal' ? 'Sample deal' : 'Sample data')
 // The "Hours not verified" tag already says this, so its matching issue is not repeated as a chip.
 const stopIssues = (s, i) => props.issues.filter((x) => x.index === i && !(x.type === 'unknown_hours' && hoursUnverified(s.listing)))
 const icon = (l) => (l.kind === 'meal' ? 'food' : (l.interests || [])[0] || l.type)
@@ -266,7 +268,10 @@ const icon = (l) => (l.kind === 'meal' ? 'food' : (l.interests || [])[0] || l.ty
             <p v-if="s.listing.dealText" class="deal">{{ s.listing.dealText }}<span v-if="s.listing.conditions?.length" class="muted fw-normal">. {{ s.listing.conditions.join(', ') }}</span></p>
             <p class="small muted m-0">{{ s.listing.address }}<template v-if="s.listing.priceText">. {{ s.listing.priceText }}</template></p>
             <p v-if="s.why" class="why small m-0">{{ s.why }}</p>
-            <p v-if="hoursUnverified(s.listing)" class="m-0"><span class="tag tag-mustard">Hours not verified</span></p>
+            <p v-if="hoursUnverified(s.listing) || sampleTag(s.listing)" class="m-0 d-flex flex-wrap gap-1">
+              <span v-if="sampleTag(s.listing)" class="tag tag-mustard">{{ sampleTag(s.listing) }}</span>
+              <span v-if="hoursUnverified(s.listing)" class="tag tag-mustard">Hours not verified</span>
+            </p>
             <div v-if="stopIssues(s, i).length" class="issue-chips">
               <span v-for="iss in stopIssues(s, i)" :key="iss.type" class="issue-chip" :class="SOFT_ISSUES.includes(iss.type) ? 'soft' : 'hard'" role="alert">
                 <svg class="issue-ico" aria-hidden="true" viewBox="0 0 24 24" width="16" height="16" focusable="false"><path d="M12 3.5 2.5 20h19L12 3.5Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" /><path d="M12 10v4.5M12 17.2v.3" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" /></svg>
