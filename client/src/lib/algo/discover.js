@@ -3,8 +3,8 @@
 // A small timeliness lift puts deals, events and Open Jios ahead of evergreen places.
 
 import { haversineKm } from '../geo.js'
-import { toMs, DAY } from '../time.js'
-import { availableInWindow } from './validity.js'
+import { toMs, DAY, HOUR, MIN, sgParts, sgTime, sgStartOfDay, fmtTime, fmtDay, fmtDateKey } from '../time.js'
+import { availableInWindow, isOpenDuring } from './validity.js'
 import { memberScore } from './itinerary.js'
 
 // The four base weights sum to 1.0. `timely` adds a small 0.08 lift for deals, events and Open Jios
@@ -88,4 +88,89 @@ export function capByKind(items, limit, kindOf = (item) => listingKind(item.list
     }
   }
   return picked.sort((a, b) => a.rank - b.rank).map((p) => p.item)
+}
+
+/**
+ * Time window for the Discover "When" chips, in Singapore time, never starting before `now`.
+ * today = the rest of today; tonight = today 6 pm to midnight; weekend = Saturday 9 am to Sunday 11 pm.
+ * @returns {{start:number,end:number}|null}
+ */
+export function whenWindow(key, now = Date.now()) {
+  const day = sgStartOfDay(now)
+  if (key === 'today') return { start: now, end: day + DAY }
+  if (key === 'tonight') return { start: Math.max(now, day + 18 * HOUR), end: day + DAY }
+  if (key !== 'weekend') return null
+  const w = sgParts(now).weekday
+  if (w === 6) return { start: now, end: day + DAY + 23 * HOUR }
+  if (w === 0) return { start: now, end: day + 23 * HOUR }
+  const sat = sgParts(now + ((6 - w + 7) % 7) * DAY)
+  const start = sgTime(sat.year, sat.month, sat.day, 9)
+  return { start, end: start + DAY + 14 * HOUR }
+}
+
+const PLACE_KIND = {
+  outdoors: 'Park', cafes: 'Cafe', food: 'Eats', nightlife: 'Bar', museums: 'Museum', arts: 'Arts',
+  shopping: 'Shops', music: 'Music', games: 'Games', wellness: 'Wellness', markets: 'Market', workshops: 'Class',
+}
+
+/** Icon name for a listing: places use their main interest, everything else its type. */
+export function listingIcon(listing) {
+  return listing.type === 'place' ? (listing.interests || [])[0] || 'place' : listing.type
+}
+
+/** "Today", "Tonight" or a short weekday for a start time. */
+function dayWord(startMs, now) {
+  const dayDiff = Math.round((sgStartOfDay(startMs) - sgStartOfDay(now)) / DAY)
+  if (dayDiff === 0) return sgParts(startMs).hour >= 18 ? 'Tonight' : 'Today'
+  if (dayDiff === 1) return 'Tmrw'
+  return fmtDay(startMs).slice(0, 3)
+}
+
+/** The few characters shown on a map pin: "1-for-1", "Sat", "3 spots", "Park". Empty when there is nothing useful to say. */
+export function pinLabel(listing, now = Date.now()) {
+  if (listing.type === 'deal') {
+    const t = `${listing.dealText || ''} ${listing.title || ''}`
+    if (/1[- ]?for[- ]?1/i.test(t)) return '1-for-1'
+    const pct = t.match(/(\d{1,2})\s*%\s*off/i)
+    if (pct) return `${pct[1]}% off`
+    const amt = t.match(/\$\s?(\d+(?:\.\d+)?)\s*off/i)
+    if (amt) return `$${amt[1]} off`
+    return 'Deal'
+  }
+  if (listing.type === 'event') return listing.startsAt ? dayWord(toMs(listing.startsAt), now) : 'Event'
+  if (listing.type === 'hangout') {
+    if (!listing.capacity) return 'Open Jio'
+    const left = Math.max(0, listing.capacity - (listing.memberCount || 0))
+    return left ? `${left} ${left === 1 ? 'spot' : 'spots'}` : 'Full'
+  }
+  return PLACE_KIND[(listing.interests || [])[0]] || ''
+}
+
+/** One short line with the thing to know first, for list rows and the preview card. */
+export function keyFact(listing, now = Date.now()) {
+  if (listing.type === 'deal') return listing.dealText || (listing.merchant ? `at ${listing.merchant}` : 'Deal')
+  if (listing.type === 'event' || listing.type === 'hangout') {
+    const start = toMs(listing.startsAt)
+    const left = listing.type === 'hangout' && listing.capacity ? Math.max(0, listing.capacity - (listing.memberCount || 0)) : null
+    const spots = left == null ? '' : left ? `${left} ${left === 1 ? 'spot' : 'spots'} left` : 'Full'
+    const when = start ? `${dayWord(start, now)} ${fmtTime(start)}` : ''
+    return [when, spots].filter(Boolean).join(' · ') || 'Time not confirmed'
+  }
+  if (isOpenDuring(listing.openingHours, now, now + 30 * MIN)) return 'Open now'
+  return PLACE_KIND[(listing.interests || [])[0]] || listing.priceText || ''
+}
+
+/** Times, validity or price for the preview card's meta line. */
+export function metaLine(listing) {
+  const bits = []
+  if (listing.type === 'event' || listing.type === 'hangout') {
+    if (listing.startsAt && listing.endsAt) {
+      const s = toMs(listing.startsAt)
+      bits.push(`${fmtDay(s)}, ${fmtTime(s)} to ${fmtTime(toMs(listing.endsAt))}`)
+    }
+  } else if (listing.type === 'deal' && listing.validity?.dateTo) {
+    bits.push(`Until ${fmtDateKey(listing.validity.dateTo)}`)
+  }
+  if (listing.priceText) bits.push(listing.priceText)
+  return bits.join(' · ')
 }

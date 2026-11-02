@@ -16,7 +16,8 @@ import { toasts } from '../lib/toast.js'
   left: 50%;
   bottom: 84px;
   transform: translateX(-50%);
-  z-index: 80;
+  /* Above map overlays such as Discover's preview card (z-index 500). */
+  z-index: 1100;
   display: flex;
   flex-direction: column;
   gap: 8px;

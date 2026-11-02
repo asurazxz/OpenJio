@@ -1,7 +1,7 @@
 <script setup>
 import { ref, computed, watch, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { createHangout, currentUser, AREAS } from '../api/index.js'
+import { createHangout, getHangout, currentUser, AREAS } from '../api/index.js'
 import InterestPicker from '../components/InterestPicker.vue'
 import JioSlip from '../components/brand/JioSlip.vue'
 import SparkDoodle from '../components/brand/SparkDoodle.vue'
@@ -72,11 +72,35 @@ const form = ref({
   capacity: 6,
   description: '',
 })
+// "Jio again" (?again=<id>): start from a past hangout's name, vibe and start point. People are not
+// carried over; the new invite link goes to the group as usual.
+const again = ref(null)
+const againId = typeof route.query.again === 'string' ? route.query.again : ''
+if (againId) {
+  getHangout(againId).then(({ hangout: h }) => {
+    // Leave anything the user already typed or picked while this loaded.
+    if (form.value.title || form.value.interests.length) return
+    again.value = h
+    form.value.title = `${h.title} again`.slice(0, 60)
+    form.value.interests = [...(h.interests || [])]
+    vibe.value = VIBES.find((v) => v.interests.length === form.value.interests.length && v.interests.every((i) => form.value.interests.includes(i)))?.key || null
+    const sa = h.startArea
+    if (sa && AREAS.some((a) => a.slug === sa.slug)) {
+      form.value.area = sa.slug
+      form.value.startArea = null
+    } else if (sa) {
+      form.value.area = null
+      form.value.startArea = { label: sa.label, lat: sa.lat, lng: sa.lng }
+      query.value = sa.label
+    }
+    originalForm = JSON.stringify(form.value)
+  }).catch(() => { /* an unreadable hangout just means a blank form */ })
+}
 const submitting = ref(false)
 // Set once the plan exists, so the redirect to it is not mistaken for abandoning unsaved work.
 const saved = ref(false)
 const errors = ref({})
-const originalForm = JSON.stringify(form.value)
+let originalForm = JSON.stringify(form.value)
 useUnsavedChanges(() => !saved.value && !submitting.value && JSON.stringify(form.value) !== originalForm, 'Leave without saving this new plan?')
 const minDate = sgDateKey(today)
 
@@ -333,6 +357,7 @@ async function submit() {
               </div>
             </fieldset>
 
+            <p v-if="again && mode === 'group'" class="again-hint small" role="note">Send the new invite link to the same group.</p>
             <div class="mb-4">
               <label for="title" class="form-label">Name</label>
               <input id="title" v-model="form.title" class="form-control" :class="{ 'is-invalid': errors.title }" :placeholder="placeholder" maxlength="60" autocomplete="off" :aria-describedby="errors.title ? 'title-err' : undefined" />
@@ -482,6 +507,7 @@ async function submit() {
 .form-card { padding: 22px; overflow: hidden; }
 .step-title { font-size: 1.35rem; margin: 0 0 18px; }
 .step-title:focus { outline: none; }
+.again-hint { margin: -8px 0 16px; padding: 8px 12px; border-radius: 12px; background: var(--teal-soft); color: var(--teal-ink); font-weight: 600; }
 legend { font-size: 0.92rem; }
 .wizard { list-style: none; display: flex; gap: 6px; padding: 0; margin: 0 0 14px; }
 .wizard li { flex: 1; }

@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref, nextTick, watch, onMounted, onBeforeUnmount } from 'vue'
+import { computed, ref, shallowRef, nextTick, watch, onMounted, onBeforeUnmount } from 'vue'
 import { LISTINGS } from '../data/seed-listings.js'
 import { journeyFrame, JOURNEY_DURATION } from '../lib/landingJourney.js'
 import MapView from './MapView.vue'
@@ -19,7 +19,14 @@ const interacted = ref(false)
 const stopButtons = []
 let origin = 'map'
 
-const layout = ref({ width: 0, height: 0, points: [] })
+const layout = ref({ width: 0, height: 0, offset: { x: 0, y: 0 }, points: [] })
+// The route is drawn inside the map's route pane so the pins stay on top of the line.
+const routePane = shallowRef(null)
+function onLayout(next) {
+  layout.value = next
+  routePane.value ??= mapView.value?.routePane() || null
+}
+const overlayStyle = computed(() => ({ width: layout.value.width + 'px', height: layout.value.height + 'px', transform: `translate(${-layout.value.offset.x}px, ${-layout.value.offset.y}px)` }))
 const elapsed = ref(0)
 const started = ref(false)
 const paused = ref(false)
@@ -114,6 +121,7 @@ function syncMotion() {
 }
 function syncDocument() { documentVisible.value = !document.hidden }
 onMounted(() => {
+  routePane.value ??= mapView.value?.routePane() || null
   motionQuery = matchMedia('(prefers-reduced-motion: reduce)')
   syncMotion()
   syncDocument()
@@ -133,12 +141,14 @@ onBeforeUnmount(() => {
 <template>
   <section class="landing-map" :data-reached="reached" :class="{ paused }" aria-label="Example outing map">
     <div ref="stage" class="map-stage">
-      <MapView ref="mapView" :markers="markers" track-layout height="100%" @select="select" @layout="layout = $event" @interact="stopStory" />
-      <svg v-if="ready" class="journey-overlay" :viewBox="'0 0 ' + layout.width + ' ' + layout.height" aria-hidden="true">
+      <MapView ref="mapView" :markers="markers" track-layout height="100%" @select="select" @layout="onLayout" @interact="stopStory" />
+      <Teleport v-if="ready && routePane" :to="routePane">
+      <svg class="journey-overlay" :style="overlayStyle" :viewBox="'0 0 ' + layout.width + ' ' + layout.height" aria-hidden="true">
         <polyline class="journey-guide" :points="linePoints" />
         <polyline class="journey-trace" :points="linePoints" pathLength="1" stroke-dasharray="1" :stroke-dashoffset="1 - routeProgress" />
         <circle v-if="frame.phase === 'travel' && traveler && !complete" class="journey-traveler" :cx="traveler.x" :cy="traveler.y" r="7" />
       </svg>
+      </Teleport>
       <div class="map-toolbar">
         <span class="example-label">Marina Bay example</span>
         <button v-if="!reducedMotion" type="button" class="playback-button" :aria-label="complete ? 'Replay route' : paused ? 'Resume animation' : 'Pause animation'" @click="togglePlayback">{{ complete ? 'Replay' : paused ? 'Resume' : 'Pause' }}</button>
@@ -177,7 +187,7 @@ onBeforeUnmount(() => {
 .landing-map { min-width: 0; position: relative; }
 .map-stage { height: clamp(390px, 55svh, 560px); min-width: 0; position: relative; background: var(--paper-2); border-radius: 28px; overflow: clip; }
 .map-stage :deep(.map-x) { border-radius: 28px; }
-.journey-overlay { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 1; pointer-events: none; }
+.journey-overlay { position: absolute; top: 0; left: 0; overflow: visible; pointer-events: none; }
 .journey-overlay polyline { fill: none; stroke: var(--teal); stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; }
 .journey-overlay .journey-guide { opacity: .18; stroke-width: 3; }
 .journey-traveler { fill: var(--teal); stroke: var(--card); stroke-width: 3; }

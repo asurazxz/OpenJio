@@ -26,11 +26,11 @@ test('Discover cards tidy an auto-extracted listing, flag gaps without jargon, a
   await expect(card.getByText('Free', { exact: true })).toBeVisible()
   await expect(page.getByText(TITLE, { exact: true })).toHaveCount(0)
 
-  // Home's "What's happening" drops auto-extracted listings that have something missing.
+  // Home's week strip drops auto-extracted listings that have something missing.
   await page.addInitScript(() => localStorage.setItem('openjio:onboarding:v1', 'done'))
   await page.goto('/signin')
   await page.getByRole('button', { name: /^Mei Lin/ }).click()
-  await expect(page.getByRole('heading', { name: "What's happening?" })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'This week around you' })).toBeVisible()
   await expect(page.locator('main').getByText('Gappy Late Night Supper')).toHaveCount(0)
   await expect(page.locator('main').getByText('Auto-extracted')).toHaveCount(0)
 })

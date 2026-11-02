@@ -29,7 +29,7 @@ let appWasInert = false
 
 // Routes are part of the tour: Next and Back keep the walkthrough open across pages.
 const steps = [
-  { path: '/', target: 'home-create', title: 'Start with your next outing', text: 'Create a jio here to plan with friends. Pick possible days, invite the group, then find a time that works.' },
+  { path: '/', target: 'home-next', title: 'Start with your next outing', text: 'Your next confirmed jio sits here, with the route and who is going. With nothing planned, Create a jio starts one: pick possible days, invite the group, then find a time that works.' },
   { path: '/discover', target: 'discover-filters', title: 'Narrow down the ideas', text: 'Search places, events and deals by name or area. Open Filters to choose interests and find something your group will enjoy.' },
   { path: '/discover', target: 'discover-view', title: 'Explore or compare', text: 'Map view shows where ideas are. Switch to Cards when you want to compare the details side by side.' },
   { path: '/discover', target: 'discover-map', title: 'A pin is an idea you can open', text: 'Select a pin for the address, opening hours, conditions and source. Add an idea to a jio’s shortlist when it suits you.' },

@@ -1,11 +1,11 @@
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { listListings, listMyHangouts, addToShortlist, currentUser, session, AREAS, INTERESTS } from '../api/index.js'
 import { useLive } from '../composables/useLive.js'
-import { rankListings, capByKind } from '../lib/algo/discover.js'
-import { fmtRange, fmtDateKey, toMs, sgParts, sgTime, DAY, HOUR } from '../lib/time.js'
-import { TYPE_LABEL, TYPE_TONE, interestLabel, areaLabel, sourceLine, spotsText } from '../lib/labels.js'
+import { rankListings, capByKind, whenWindow, pinLabel, listingIcon } from '../lib/algo/discover.js'
+import { fmtRange, toMs, sgParts } from '../lib/time.js'
+import { interestLabel, areaLabel } from '../lib/labels.js'
 import { toast, toastError } from '../lib/toast.js'
 import ListingCard from '../components/ListingCard.vue'
 import MapView from '../components/MapView.vue'
@@ -13,6 +13,8 @@ import AppDialog from '../components/AppDialog.vue'
 import EmptyState from '../components/EmptyState.vue'
 import CategoryIcon from '../components/brand/CategoryIcon.vue'
 import ListingDetails from '../components/ListingDetails.vue'
+import ResultRow from '../components/discover/ResultRow.vue'
+import PreviewCard from '../components/discover/PreviewCard.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -33,6 +35,8 @@ const view = ref(viewFor(route.query))
 const active = ref(null)
 // Caps: the map draws at most MAP_PIN_LIMIT pins; Cards load CARD_PAGE at a time.
 const MAP_PIN_LIMIT = 30
+// The map opens on the best few matches rather than every pin, so the first view is close enough to read.
+const FIT_TOP = 12
 const CARD_PAGE = 24
 const visibleCards = ref(CARD_PAGE)
 
@@ -51,14 +55,13 @@ watch([q, type, area, when, view, picked], () => {
     area: area.value || undefined, when: when.value !== 'any' ? when.value : route.query.for ? 'any' : undefined,
     view: view.value !== viewFor({ type: type.value }) ? view.value : undefined, tags: picked.value.join(',') || undefined } })
 }, { deep: true })
-const filterCount = computed(() => picked.value.length)
+const filterCount = computed(() => picked.value.length + (area.value ? 1 : 0))
 
 
 const types = [
-  { key: 'all', label: 'Everything' },
-  { key: 'place', label: 'Places' },
-  { key: 'event', label: 'Events' },
   { key: 'deal', label: 'Deals' },
+  { key: 'event', label: 'Events' },
+  { key: 'place', label: 'Places' },
   { key: 'hangout', label: 'Open Jios' },
 ]
 
@@ -67,28 +70,29 @@ function setType(key) {
   if ((key === 'hangout') !== hangoutView.value) view.value = viewFor({ type: key })
   type.value = key
 }
+// A pressed type chip is released by pressing it again.
+const toggleType = (key) => setType(type.value === key ? 'all' : key)
 
-function weekend() {
-  const now = Date.now()
-  const w = sgParts(now).weekday
-  const toSat = (6 - w + 7) % 7
-  const sat = sgParts(now + toSat * DAY)
-  const start = sgTime(sat.year, sat.month, sat.day, 9)
-  return { start: Math.max(start, now), end: start + DAY + 14 * HOUR }
-}
 const activeHangouts = computed(() => (mine.value || []).filter((h) => !['ended', 'cancelled'].includes(h.stage)))
-const timeOptions = computed(() => [
+const whenChips = [
   { key: 'any', label: 'Any time' },
+  { key: 'today', label: 'Today' },
+  { key: 'tonight', label: 'Tonight' },
   { key: 'weekend', label: 'This weekend' },
-  ...activeHangouts.value.filter((h) => h.lockedSlot).map((h) => ({ key: `h:${h.id}`, label: `During "${h.title}"` })),
-])
+]
+const duringOptions = computed(() => activeHangouts.value.filter((h) => h.lockedSlot).map((h) => ({ key: `h:${h.id}`, label: `During "${h.title}"` })))
 const timeWindow = computed(() => {
-  if (when.value === 'weekend') return weekend()
+  if (['today', 'tonight', 'weekend'].includes(when.value)) return whenWindow(when.value)
   if (when.value.startsWith('h:')) {
     const h = activeHangouts.value.find((x) => x.id === when.value.slice(2))
     return h?.lockedSlot || null
   }
   return null
+})
+const windowText = computed(() => {
+  if (when.value === 'today') return 'today'
+  if (when.value === 'tonight') return 'tonight'
+  return timeWindow.value ? fmtRange(timeWindow.value.start, timeWindow.value.end) : ''
 })
 
 const interestWeights = computed(() => {
@@ -126,44 +130,148 @@ function fmtKeyNow() {
   return `${p.year}-${String(p.month).padStart(2, '0')}-${String(p.day).padStart(2, '0')}`
 }
 
+/* Map and the "in this area" list. `searched` is the viewport the list was last searched for; null means the
+   whole result set (the map fits it on load and whenever the filters change). Panning only offers
+   "Search this area"; the list changes when it is pressed. */
+const mapRef = ref(null)
+const hoverId = ref(null)
+const selectedId = ref(null)
+const searched = ref(null)
+const moved = ref(false)
+const fitNonce = ref(0)
+
 // Only listings with coordinates can get a pin. The cap keeps a mix of kinds (round-robin, rank order kept).
 const pinnable = computed(() => results.value.filter((r) => Number.isFinite(r.listing.lat) && Number.isFinite(r.listing.lng)))
-const pinned = computed(() => capByKind(pinnable.value, MAP_PIN_LIMIT))
-const pinsCapped = computed(() => pinnable.value.length > MAP_PIN_LIMIT)
-// Counts from the same total as the results line, so the two numbers always agree.
+const inArea = computed(() => {
+  const b = searched.value
+  if (!b) return pinnable.value
+  return pinnable.value.filter(({ listing: l }) => l.lat >= b.south && l.lat <= b.north && l.lng >= b.west && l.lng <= b.east)
+})
+const pinned = computed(() => capByKind(inArea.value, MAP_PIN_LIMIT))
+const unlocated = computed(() => results.value.length - pinnable.value.length)
+// The map refits when the set of results changes (or the map is shown again), not when the list is re-searched.
+const fitKey = computed(() => `${fitNonce.value}|${pinnable.value.map((r) => r.listing.id).sort().join(',')}`)
+// Right after a fit the list follows whatever the map settles on; once a person moves it, only "Search this area" does.
+let settling = true
+let settleTimer = setTimeout(() => { settling = false }, 2000)
+function refit() {
+  searched.value = null
+  moved.value = false
+  settling = true
+  clearTimeout(settleTimer)
+  settleTimer = setTimeout(() => { settling = false }, 2000)
+}
+watch(fitKey, refit)
+onBeforeUnmount(() => clearTimeout(settleTimer))
+watch(view, async (v) => {
+  if (v !== 'map') return
+  await nextTick()
+  mapRef.value?.invalidate()
+  fitNonce.value++
+})
+// Counts agree with the results line and the list: pins are capped, and the list shows exactly the pins.
 const mapCaption = computed(() => {
-  if (pinned.value.length >= results.value.length) return ''
-  const unpinned = results.value.length - pinnable.value.length
-  return [
-    `Map shows ${pinned.value.length} of ${results.value.length}.`,
-    unpinned ? `${unpinned} without a map location ${unpinned === 1 ? 'is' : 'are'} in Cards.` : '',
-    pinsCapped.value ? 'Filter by area or type to narrow it down.' : '',
-  ].filter(Boolean).join(' ')
+  const parts = []
+  if (pinned.value.length < inArea.value.length) {
+    parts.push(searched.value ? `Map shows ${pinned.value.length} of ${inArea.value.length} in this area.` : `Map shows ${pinned.value.length} of ${results.value.length}.`)
+    parts.push(searched.value ? 'Zoom in or filter by type to see the rest.' : 'Filter by area or type to narrow it down.')
+  }
+  if (unlocated.value) parts.push(`${unlocated.value} without a map location ${unlocated.value === 1 ? 'is' : 'are'} in Cards.`)
+  return parts.join(' ')
+})
+const areaLine = computed(() => {
+  const n = inArea.value.length
+  const shown = pinned.value.length
+  return shown < n ? `Top ${shown} of ${n} in this area` : `${n} in this area`
 })
 const shownCards = computed(() => results.value.slice(0, visibleCards.value))
 
 const markers = computed(() =>
-  pinned.value.map((r) => ({
+  pinned.value.map((r, i) => ({
     id: r.listing.id,
     lat: r.listing.lat,
     lng: r.listing.lng,
     title: r.listing.title,
     label: '',
     tone: { place: 'teal', event: 'plum', deal: 'mustard', hangout: 'tomato' }[r.listing.type],
-    active: active.value === r.listing.id,
-    preview: {
-      kind: `${TYPE_LABEL[r.listing.type]} · ${areaLabel(r.listing.area)}`,
-      location: r.listing.address || areaLabel(r.listing.area),
-      when: r.listing.startsAt && r.listing.endsAt ? fmtRange(toMs(r.listing.startsAt), toMs(r.listing.endsAt)) : '',
-      price: r.listing.priceText,
-      spots: r.listing.type === 'hangout' && r.listing.capacity ? spotsText(r.listing.capacity, r.listing.memberCount) : '',
-    },
+    icon: listingIcon(r.listing),
+    pill: pinLabel(r.listing),
+    active: selectedId.value === r.listing.id,
+    fit: i < FIT_TOP,
   })),
 )
-function selectFromMap(id) {
-  active.value = id
-  detail.value = results.value.find((r) => r.listing.id === id)?.listing || null
+
+const selected = computed(() => results.value.find((r) => r.listing.id === selectedId.value) || null)
+// The side list starts short; every pin stays on the map. A new search starts it short again.
+const RAIL_PAGE = 12
+const railLimit = ref(RAIL_PAGE)
+const railRows = computed(() => pinned.value.slice(0, railLimit.value))
+watch(pinned, () => { railLimit.value = RAIL_PAGE })
+watch(results, () => { if (selectedId.value && !selected.value) selectedId.value = null })
+function select(id) {
+  // A pin picked on the map opens its row too, even when it sits below the short list.
+  const index = pinned.value.findIndex((r) => r.listing.id === id)
+  if (index >= railLimit.value) railLimit.value = index + 1
+  selectedId.value = id
+  // Keep the pin clear of the docked card (about 150 px tall).
+  mapRef.value?.reveal(id, { bottomInset: 170 })
 }
+function closePreview() { selectedId.value = null }
+function onKey(e) {
+  if (e.key === 'Escape' && selectedId.value && !detail.value && !adding.value && view.value === 'map') closePreview()
+}
+onMounted(() => window.addEventListener('keydown', onKey))
+onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
+
+// Hovering a pin lights its row too; bring that row into the visible part of the list.
+function onPinHover(id) {
+  hoverId.value = id
+  if (id) document.getElementById(`row-${id}`)?.scrollIntoView({ block: 'nearest' })
+}
+function onView({ bounds, user: byUser }) {
+  if (view.value !== 'map') return
+  if (byUser) {
+    settling = false
+    moved.value = true
+  } else if (settling) searched.value = bounds
+}
+function searchHere() {
+  const b = mapRef.value?.getBounds()
+  if (!b) return
+  settling = false
+  searched.value = b
+  moved.value = false
+}
+
+/* Area shortcuts and Near me only move the map; the list follows once the map has landed. */
+const SHORTCUTS = ['bugis', 'orchard', 'chinatown', 'marina-bay'].map((slug) => AREAS.find((a) => a.slug === slug)).filter(Boolean)
+const geoNote = ref('')
+let geoTimer = null
+function say(text) {
+  geoNote.value = text
+  clearTimeout(geoTimer)
+  geoTimer = setTimeout(() => { geoNote.value = '' }, 7000)
+}
+async function flyToArea(a) {
+  await mapRef.value?.flyTo(a.lat, a.lng, 15)
+  searchHere()
+}
+const locating = ref(false)
+function nearMe() {
+  if (!navigator.geolocation) { say('This browser cannot share your location. Pick an area instead.'); return }
+  locating.value = true
+  navigator.geolocation.getCurrentPosition(async ({ coords }) => {
+    locating.value = false
+    // The coordinates only steer the map; they are not stored or sent anywhere.
+    if (coords.latitude < 1.14 || coords.latitude > 1.5 || coords.longitude < 103.5 || coords.longitude > 104.1) { say('You seem to be outside Singapore. Pick an area instead.'); return }
+    await mapRef.value?.flyTo(coords.latitude, coords.longitude, 15)
+    searchHere()
+  }, (err) => {
+    locating.value = false
+    say(err.code === 1 ? 'Location is switched off for this site. Pick an area instead.' : 'Could not find your location. Pick an area instead.')
+  }, { timeout: 8000, maximumAge: 60000 })
+}
+onBeforeUnmount(() => clearTimeout(geoTimer))
 
 function toggleInterest(slug) {
   picked.value = picked.value.includes(slug) ? picked.value.filter((s) => s !== slug) : [...picked.value, slug]
@@ -237,39 +345,46 @@ async function confirmAdd() {
           <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M11 4a7 7 0 1 1 0 14 7 7 0 0 1 0-14Zm5 12 4 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" /></svg>
           <input id="q" v-model="q" type="search" class="form-control" placeholder="Search kopi, bouldering, Katong…" />
         </div>
-        <div class="f-selects">
-          <label class="visually-hidden" for="area-f">Area</label>
-          <select id="area-f" v-model="area" class="form-select">
-            <option value="">Anywhere</option>
-            <option v-for="a in AREAS" :key="a.slug" :value="a.slug">{{ a.label }}</option>
-          </select>
-          <label class="visually-hidden" for="when-f">When</label>
-          <select id="when-f" v-model="when" class="form-select">
-            <option v-for="t in timeOptions" :key="t.key" :value="t.key">{{ t.label }}</option>
-          </select>
+        <label class="visually-hidden" for="when-f">When</label>
+        <select id="when-f" v-model="when" class="form-select when-select" :class="{ on: when !== 'any' }">
+          <option v-for="t in whenChips" :key="t.key" :value="t.key">{{ t.label }}</option>
+          <optgroup v-if="duringOptions.length" label="During a plan">
+            <option v-for="t in duringOptions" :key="t.key" :value="t.key">{{ t.label }}</option>
+          </optgroup>
+        </select>
+        <div v-if="!hangoutView" class="chip-row" role="group" aria-label="Type">
+          <button v-for="t in types" :key="t.key" type="button" class="chip" :aria-pressed="type === t.key" @click="toggleType(t.key)">{{ t.label }}</button>
         </div>
         <button type="button" class="btn btn-secondary filter-toggle" :aria-expanded="filtersOpen" aria-controls="interest-filters" @click="filtersOpen = !filtersOpen">
           <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M4 7h16M7 12h10M10 17h4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" /></svg>
           Filters <span v-if="filterCount" class="filter-count">{{ filterCount }}</span>
         </button>
       </div>
-      <div v-if="!hangoutView" class="chip-row type-row" role="group" aria-label="Type">
-        <button v-for="t in types" :key="t.key" type="button" class="chip" :aria-pressed="type === t.key" @click="setType(t.key)">{{ t.label }}</button>
-      </div>
-      <RouterLink v-else to="/discover" class="back-link small fw-bold">Browse all of Discover</RouterLink>
+      <RouterLink v-if="hangoutView" to="/discover" class="back-link small fw-bold">Browse all of Discover</RouterLink>
       <section v-if="filtersOpen" id="interest-filters" class="interest-filters" aria-label="More filters">
         <div class="filter-heading"><h2 class="h6 m-0">What are you in the mood for?</h2><button v-if="picked.length" type="button" class="btn btn-ghost btn-sm" @click="picked = []">Reset tags</button></div>
         <div class="chip-row" role="group" aria-label="Interests">
           <button v-for="i in INTERESTS" :key="i.slug" type="button" class="chip" :aria-pressed="picked.includes(i.slug)" @click="toggleInterest(i.slug)"><CategoryIcon :name="i.slug" :size="16" />{{ i.label }}</button>
         </div>
+        <div class="area-pick">
+          <label for="area-f" class="form-label">Area</label>
+          <select id="area-f" v-model="area" class="form-select">
+            <option value="">Anywhere</option>
+            <option v-for="a in AREAS" :key="a.slug" :value="a.slug">{{ a.label }}</option>
+          </select>
+        </div>
         <label v-if="user" class="personalise"><input v-model="forYou" type="checkbox" class="form-check-input" /> Use my interests to rank results</label>
       </section>
-      <div v-else-if="picked.length" class="active-filters" aria-label="Selected interests"><span class="small muted">Filtered by</span><button v-for="tag in picked" :key="tag" type="button" class="chip" :aria-label="`Remove ${interestLabel(tag)} filter`" @click="toggleInterest(tag)">{{ interestLabel(tag) }} <span aria-hidden="true">×</span></button></div>
+      <div v-else-if="picked.length || area" class="active-filters" aria-label="Selected filters">
+        <span class="small muted">Filtered by</span>
+        <button v-if="area" type="button" class="chip" :aria-label="`Remove ${areaLabel(area)} area filter`" @click="area = ''">{{ areaLabel(area) }} <span aria-hidden="true">×</span></button>
+        <button v-for="tag in picked" :key="tag" type="button" class="chip" :aria-label="`Remove ${interestLabel(tag)} filter`" @click="toggleInterest(tag)">{{ interestLabel(tag) }} <span aria-hidden="true">×</span></button>
+      </div>
     </div>
 
     <div class="d-flex justify-content-between align-items-center my-3 gap-2 flex-wrap">
       <p class="m-0 small muted" role="status">
-        {{ results.length }} {{ results.length === 1 ? 'result' : 'results' }}<template v-if="timeWindow"> that fit {{ fmtRange(timeWindow.start, timeWindow.end) }}</template><template v-if="nearHome"> near {{ nearHome.label }}, your home area</template>
+        {{ results.length }} {{ results.length === 1 ? 'result' : 'results' }}<template v-if="timeWindow"> that fit {{ windowText }}</template><template v-if="nearHome"> near {{ nearHome.label }}, your home area</template>
         <button v-if="filtered" type="button" class="btn btn-ghost btn-sm" @click="clearFilters">Clear filters</button>
       </p>
       <div class="seg" role="group" aria-label="Display" data-tour="discover-view">
@@ -298,13 +413,44 @@ async function confirmAdd() {
         </template>
       </div>
       <div class="map-col" v-show="view === 'map'">
-        <div class="map-sticky" data-tour="discover-map">
-          <MapView :markers="markers" cluster scroll-wheel-zoom height="clamp(380px, 65vh, 720px)" @select="selectFromMap" />
-          <div class="legend small">
-            <span><i class="dot teal"></i>Place</span><span><i class="dot plum"></i>Event</span><span><i class="dot mustard"></i>Deal</span><span><i class="dot tomato"></i>Open Jio</span>
+        <div class="map-layout" data-tour="discover-map">
+          <aside class="rail" aria-label="Results in this area">
+            <p class="rail-head" aria-live="polite"><strong>{{ areaLine }}</strong> · best match first</p>
+            <div v-if="pinned.length" class="rail-scroll">
+            <ul class="rail-list">
+              <ResultRow
+                v-for="r in railRows" :key="r.listing.id" :listing="r.listing" :km="near ? r.km : null"
+                :hot="hoverId === r.listing.id" :selected="selectedId === r.listing.id"
+                @select="select" @hover="hoverId = $event"
+              />
+            </ul>
+            <button v-if="pinned.length > railLimit" type="button" class="rail-more" @click="railLimit = pinned.length">Show {{ pinned.length - railLimit }} more</button>
+            </div>
+            <p v-else class="rail-empty small muted">Nothing here. Pan the map and press Search this area, or clear a filter.</p>
+          </aside>
+          <div class="stage">
+            <MapView
+              ref="mapRef" :markers="markers" cluster pills scroll-wheel-zoom height="100%" :fit-key="fitKey"
+              :highlight-id="hoverId" @select="select" @hover="onPinHover" @view="onView"
+            />
+            <div class="map-chips" role="group" aria-label="Jump to an area">
+              <button v-for="a in SHORTCUTS" :key="a.slug" type="button" class="map-chip" @click="flyToArea(a)">{{ a.label }}</button>
+              <button type="button" class="map-chip near-me" :disabled="locating" @click="nearMe">
+                <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M12 3v3M12 18v3M3 12h3M18 12h3M12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" /></svg>
+                {{ locating ? 'Finding you…' : 'Near me' }}
+              </button>
+            </div>
+            <p v-if="geoNote" class="geo-note small" role="status">{{ geoNote }}</p>
+            <button v-if="moved" type="button" class="search-area" @click="searchHere"><svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 5v6h-6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" /></svg>Search this area</button>
+            <div v-if="selected" class="preview-dock">
+              <PreviewCard :listing="selected.listing" @close="closePreview" @details="detail = $event" @add="onAdd" />
+            </div>
           </div>
-          <p v-if="mapCaption" class="small muted map-cap">{{ mapCaption }}</p>
         </div>
+        <div class="legend small">
+          <span><i class="dot teal"></i>Place</span><span><i class="dot plum"></i>Event</span><span><i class="dot mustard"></i>Deal</span><span><i class="dot tomato"></i>Open Jio</span>
+        </div>
+        <p v-if="mapCaption" class="small muted map-cap">{{ mapCaption }}</p>
       </div>
     </div>
 
@@ -342,21 +488,23 @@ async function confirmAdd() {
 
 <style scoped>
 .discover-page { max-width: 1480px; }
-.filters { padding: 14px 16px; }
-.f-row { display: flex; flex-wrap: wrap; gap: 10px; }
-.search { position: relative; flex: 1 1 280px; }
+.filters { padding: 12px 14px; }
+.f-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; }
+.search { position: relative; flex: 1 1 220px; max-width: 380px; }
 .search svg { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--ink-2); }
 .search .form-control { padding-left: 38px; }
-.f-selects { display: flex; gap: 10px; flex: 1 1 300px; }
-.f-selects .form-select { flex: 1; min-width: 0; }
-.filter-toggle { flex: 0 0 auto; }
+.f-row .chip-row { gap: 6px; }
+.f-row .chip { min-height: 34px; padding: 0.25rem 0.7rem; font-size: 0.88rem; }
+.when-select { width: auto; max-width: 220px; min-height: 34px; padding-top: 0.2rem; padding-bottom: 0.2rem; border-radius: 999px; font-size: 0.88rem; font-weight: 600; }
+.when-select.on { background-color: var(--tomato-soft); color: var(--tomato-ink); border-color: color-mix(in srgb, var(--tomato) 55%, transparent); }
+.filter-toggle { flex: 0 0 auto; margin-left: auto; }
 .filter-count { display: inline-grid; place-items: center; min-width: 23px; height: 23px; background: var(--tomato-soft); color: var(--tomato-ink); border-radius: 50%; }
-.type-row { margin-top: 12px; }
 .back-link { display: inline-block; margin-top: 10px; }
 .head-row { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px 20px; flex-wrap: wrap; }
 .head-row p { margin-bottom: 0; }
 .interest-filters { border-top: 1px solid var(--line); padding-top: 14px; margin-top: 14px; }
 .filter-heading { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; gap: 10px; }
+.area-pick { margin-top: 14px; max-width: 280px; }
 .personalise { display: inline-flex; gap: 8px; align-items: center; margin-top: 14px; font-size: 0.9rem; }
 .active-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 12px; }
 .seg { display: flex; background: var(--paper-2); border-radius: 14px; padding: 4px; }
@@ -367,7 +515,27 @@ async function confirmAdd() {
 .cards { list-style: none; padding: 0; margin: 0; display: grid; gap: 12px; }
 .map-mode .map-col { width: 100%; }
 .map-mode .list-col { display: none; }
-.map-sticky { width: 100%; }
+
+/* Map with its list: side by side from 992 px, map only below that. */
+.map-layout { display: grid; grid-template-columns: minmax(0, 1fr); }
+.rail { display: none; }
+.stage { position: relative; height: clamp(400px, 66vh, 720px); min-width: 0; }
+.map-chips { position: absolute; z-index: 500; top: 10px; left: 54px; right: 10px; display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; padding: 2px; }
+.map-chips::-webkit-scrollbar { display: none; }
+.map-chip {
+  flex: none; display: inline-flex; align-items: center; gap: 5px; min-height: 34px; padding: 0 12px;
+  border: 1px solid var(--line-strong); border-radius: 999px; background: var(--card); color: var(--ink);
+  font-size: 0.85rem; font-weight: 700; box-shadow: 0 1px 4px rgba(var(--oj-shadow-rgb), 0.18); cursor: pointer;
+}
+.map-chip:hover { border-color: var(--ink); }
+.map-chip:focus-visible { outline: 3px solid var(--oj-focus); outline-offset: 2px; }
+.map-chip:disabled { opacity: 0.7; cursor: progress; }
+.geo-note { position: absolute; z-index: 500; top: 52px; left: 54px; max-width: min(360px, calc(100% - 70px)); margin: 0; padding: 8px 12px; border-radius: 12px; background: var(--card); color: var(--ink); border: 1px solid var(--line-strong); box-shadow: var(--shadow-pop); }
+/* A quiet floating pill, as in map apps: it offers a refresh; it is not the page's main action. */
+.search-area { position: absolute; z-index: 500; top: 54px; left: 50%; transform: translateX(-50%); display: inline-flex; align-items: center; gap: 6px; min-height: 34px; padding: 0 14px; border: 1px solid var(--line-strong); border-radius: 999px; background: var(--card); color: var(--ink); font-size: 0.85rem; font-weight: 700; box-shadow: var(--shadow-pop); white-space: nowrap; cursor: pointer; }
+.search-area:hover { border-color: var(--ink); }
+.search-area:focus-visible { outline: 3px solid var(--oj-focus); outline-offset: 2px; }
+.preview-dock { position: absolute; z-index: 500; left: 12px; right: 12px; bottom: 28px; max-width: 460px; container: preview / inline-size; }
 .legend { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 8px; color: var(--ink-2); }
 .map-cap { margin: 6px 0 0; }
 .show-more { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-top: 16px; }
@@ -375,9 +543,21 @@ async function confirmAdd() {
 .dot.teal { background: var(--teal); } .dot.plum { background: var(--plum); } .dot.mustard { background: var(--mustard); } .dot.tomato { background: var(--tomato); }
 .pick { display: flex; align-items: flex-start; min-height: 44px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 14px; cursor: pointer; background: var(--card); }
 .pick.on { border-color: var(--tomato); background: var(--tomato-soft); }
-@media (max-width: 575.98px) { .filter-toggle { flex: 1; } .seg { width: 100%; } .seg button { flex: 1; } }
+@media (max-width: 575.98px) { .filter-toggle { flex: 1; margin-left: 0; } .seg { width: 100%; } .seg button { flex: 1; } .search { max-width: none; } .f-row { gap: 10px; } }
 @media (min-width: 576px) { .cards-mode .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (min-width: 992px) {
   .cards-mode .cards { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .map-layout { grid-template-columns: 300px minmax(0, 1fr); gap: 16px; height: clamp(480px, calc(100vh - 340px), 780px); }
+  .stage { height: 100%; }
+  .rail { display: flex; flex-direction: column; min-height: 0; }
+  .rail-head { margin: 0 0 8px; font-size: 0.88rem; color: var(--ink-2); }
+  .rail-head strong { color: var(--ink); }
+  .rail-scroll { flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: thin; padding: 4px; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius-lg); }
+  .rail-list { list-style: none; margin: 0; padding: 0; }
+  .rail-list > li + li { border-top: 1px solid var(--line); }
+  .rail-more { display: block; width: 100%; margin-top: 4px; padding: 10px; border: 0; border-top: 1px solid var(--line); background: none; color: var(--tomato-ink); font-weight: 700; font-size: 0.88rem; cursor: pointer; }
+  .rail-more:hover { background: var(--paper-2); }
+  .rail-more:focus-visible { outline: 3px solid var(--oj-focus); outline-offset: -3px; }
+  .rail-empty { padding: 12px; border: 1px dashed var(--line-strong); border-radius: 14px; }
 }
 </style>

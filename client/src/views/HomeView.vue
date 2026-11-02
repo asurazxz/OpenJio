@@ -1,14 +1,12 @@
 <script setup>
-import { computed } from 'vue'
-import { listMyHangouts, listListings, currentUser } from '../api/index.js'
+import { ref, computed, watch } from 'vue'
+import { listMyHangouts, listListings, getHangout, currentUser } from '../api/index.js'
 import { useLive } from '../composables/useLive.js'
-import { fmtRange, fmtDateKey, toMs } from '../lib/time.js'
-import { STAGE_LABEL, interestLabel, spotsText } from '../lib/labels.js'
+import { fmtRange, fmtDateKey, sgDateKey, fromDateKey, DAY } from '../lib/time.js'
 import UserAvatar from '../components/UserAvatar.vue'
-import EmptyState from '../components/EmptyState.vue'
 import SteamDoodle from '../components/brand/SteamDoodle.vue'
-import CategoryIcon from '../components/brand/CategoryIcon.vue'
-import ListingCard from '../components/ListingCard.vue'
+import NextUpTicket from '../components/home/NextUpTicket.vue'
+import WeekStrip from '../components/home/WeekStrip.vue'
 
 const { data: hangouts, error, loading } = useLive(listMyHangouts)
 const { data: listings } = useLive(listListings)
@@ -21,38 +19,41 @@ function needsMe(h) {
   if (h.stage === 'voting' && h.stopCount) return h.myRole === 'host' ? 'Review votes and confirm' : 'Vote on the plan'
   return null
 }
+const ACTION_LINK = {
+  'Add your free times': 'Add your times',
+  'Pick a time': 'Pick a time',
+  'Build the plan': 'Build the plan',
+  'Review votes and confirm': 'Review votes',
+  'Vote on the plan': 'Vote on the plan',
+}
 
+const isPast = (h, now = Date.now()) => h.stage === 'ended' || h.stage === 'cancelled' || (h.lockedSlot && h.lockedSlot.end < now - 6 * 3600e3)
 const groups = computed(() => {
   const list = hangouts.value || []
   const now = Date.now()
-  const past = (h) => h.stage === 'ended' || h.stage === 'cancelled' || (h.lockedSlot && h.lockedSlot.end < now - 6 * 3600e3)
   return {
-    action: list.filter((h) => !past(h) && needsMe(h)),
-    upcoming: list.filter((h) => !past(h) && !needsMe(h)),
-    past: list.filter(past),
+    action: list.filter((h) => !isPast(h, now) && needsMe(h)),
+    upcoming: list.filter((h) => !isPast(h, now) && !needsMe(h)),
+    past: list.filter((h) => isPast(h, now)),
   }
 })
 
-const openJios = computed(() =>
-  (listings.value || [])
-    .filter((l) => l.type === 'hangout' && toMs(l.endsAt) > Date.now() - 864e5)
-    .filter((l) => !(hangouts.value || []).some((h) => h.id === l.hangoutId))
-    .slice(0, 2),
-)
-// Two columns on desktop only when both "Needs you" and "Coming up" have cards.
-const duo = computed(() => groups.value.action.length > 0 && groups.value.upcoming.length > 0)
-
-// What's happening: soonest upcoming events and still-valid deals, after any Open Jios. Home keeps
-// curated listings and auto-extracted ones with nothing missing; the rest stay in Discover.
-const happening = computed(() => {
-  const all = (listings.value || []).filter((l) => !l.autoPublished || (!(l.missing || []).length && l.locationKnown !== false))
+// Next up: the soonest confirmed hangout, or else the soonest one with a time locked in.
+const nextUp = computed(() => {
   const now = Date.now()
-  const events = all
-    .filter((l) => l.type === 'event' && toMs(l.endsAt) > now)
-    .sort((a, b) => toMs(a.startsAt) - toMs(b.startsAt))
-    .slice(0, 2)
-  const deals = all.filter((l) => l.type === 'deal' && (!l.validity?.dateTo || toMs(l.validity.dateTo + 'T23:59:59+08:00') > now)).slice(0, 2)
-  return [...events, ...deals]
+  const live = (hangouts.value || []).filter((h) => h.lockedSlot && h.lockedSlot.end > now && !isPast(h, now))
+  const soonest = (stage) => live.filter((h) => h.stage === stage).sort((a, b) => a.lockedSlot.start - b.lockedSlot.start)[0]
+  return soonest('final') || soonest('voting') || null
+})
+const comingUp = computed(() => groups.value.upcoming.filter((h) => h.id !== nextUp.value?.id))
+
+const mineThisWeek = computed(() => (hangouts.value || []).filter((h) => h.lockedSlot && !isPast(h)))
+// Home keeps curated listings and auto-extracted ones with nothing missing; the rest stay in Discover.
+const weekListings = computed(() => {
+  const mine = new Set((hangouts.value || []).map((h) => h.id))
+  return (listings.value || [])
+    .filter((l) => !l.autoPublished || (!(l.missing || []).length && l.locationKnown !== false))
+    .filter((l) => !(l.type === 'hangout' && mine.has(l.hangoutId)))
 })
 
 function when(h) {
@@ -60,12 +61,45 @@ function when(h) {
   if (h.dateFrom) return h.dateFrom === h.dateTo ? fmtDateKey(h.dateFrom) : `${fmtDateKey(h.dateFrom)} to ${fmtDateKey(h.dateTo)}`
   return ''
 }
+const shortWhen = (h) => (h.lockedSlot ? fmtRange(h.lockedSlot.start, h.lockedSlot.end).split(',')[0] : when(h))
+const dots = (h) => Array.from({ length: Math.min(h.memberCount, 8) }, (_, i) => i < h.respondedCount)
+
+// Your usual crew: distinct groups of 2+ others from past and current jios, most recent first.
+const crews = ref([])
+let crewSeq = 0
+watch(hangouts, async (list) => {
+  const mine = ++crewSeq
+  const own = (list || []).filter((h) => h.mode !== 'solo' && h.visibility !== 'public' && h.stage !== 'cancelled' && h.memberCount > 2)
+  const settled = await Promise.allSettled(own.map((h) => getHangout(h.id)))
+  if (mine !== crewSeq) return
+  const seen = new Set()
+  const out = []
+  settled.forEach((r, i) => {
+    if (r.status !== 'fulfilled') return
+    const others = r.value.members.filter((m) => m.userId !== user.value?.id).map((m) => m.user).filter(Boolean)
+    const key = others.map((u) => u.id).sort().join('|')
+    if (others.length < 2 || seen.has(key)) return
+    seen.add(key)
+    out.push({ id: own[i].id, title: own[i].title, people: others })
+  })
+  crews.value = out.slice(0, 3)
+}, { immediate: true })
+
 const firstName = computed(() => user.value?.name.split(' ')[0] || '')
+const away = (h) => {
+  const d = Math.round((fromDateKey(sgDateKey(h.lockedSlot.start)) - fromDateKey(sgDateKey(Date.now()))) / DAY)
+  return d <= 0 ? 'today' : d === 1 ? 'tomorrow' : `in ${d} days`
+}
 const greeting = computed(() => {
-  const h = new Date().getHours()
-  if (h < 11) return { line: `Kopi first, ${firstName.value}?`, sub: 'Good morning. Here is what your groups are up to.' }
-  if (h < 17) return { line: `Free later, ${firstName.value}?`, sub: 'Your jios, and a few things happening around Singapore.' }
-  return { line: `Jio makan, ${firstName.value}?`, sub: 'Your jios, and a few things happening tonight and this week.' }
+  const hr = new Date().getHours()
+  const line = hr < 11 ? `Kopi first, ${firstName.value}?` : hr < 17 ? `Free later, ${firstName.value}?` : `Jio makan, ${firstName.value}?`
+  const n = groups.value.action.length
+  const parts = []
+  if (nextUp.value) parts.push(`${nextUp.value.title} is ${away(nextUp.value)}.`)
+  if (n) parts.push(n === 1 ? 'One jio needs you.' : `${n} jios need you.`)
+  else if (hangouts.value?.length) parts.push("You're all caught up.")
+  const sub = parts.length ? parts.join(' ') : 'Start a jio, or see what is on around Singapore this week.'
+  return { line, sub }
 })
 </script>
 
@@ -74,92 +108,72 @@ const greeting = computed(() => {
     <header class="hello">
       <div class="hello-text">
         <h1>{{ greeting.line }}</h1>
-        <p>{{ greeting.sub }}</p>
+        <p>{{ loading ? 'Checking in on your jios…' : greeting.sub }}</p>
       </div>
       <SteamDoodle class="hello-art" :size="84" />
     </header>
 
-    <section class="starters" aria-label="Start something" data-tour="home-start">
-      <RouterLink to="/new?mode=group" data-tour="home-create" class="starter s-create">
-        <span class="s-ico" aria-hidden="true"><CategoryIcon name="plus" :size="30" /></span>
-        <span class="s-title">Create a jio</span>
-        <span class="s-sub">Pick a few days, see who is free, plan it together.</span>
-      </RouterLink>
-      <RouterLink to="/discover?type=hangout" class="starter s-find">
-        <span class="s-ico" aria-hidden="true"><CategoryIcon name="hangout" :size="30" /></span>
-        <span class="s-title">Find Open Jios</span>
-        <span class="s-sub">Join a public hangout with spots left.</span>
-      </RouterLink>
-      <RouterLink to="/discover" class="starter s-discover">
-        <span class="s-ico" aria-hidden="true"><CategoryIcon name="place" :size="30" /></span>
-        <span class="s-title">Discover</span>
-        <span class="s-sub">Places, events and deals near you.</span>
-      </RouterLink>
-    </section>
-
     <div v-if="loading" class="py-5 text-center"><span class="spinner-border" aria-label="Loading"></span></div>
     <div v-else-if="error" class="notice danger"><p>{{ error.message }}</p></div>
     <template v-else>
-      <EmptyState
-        v-if="!hangouts?.length"
-        title="No jios yet"
-        body="Start one with your friends, or see what is on in Discover."
-        tone="tomato"
-      >
-        <RouterLink to="/new?mode=group" class="btn btn-primary">Create a jio</RouterLink>
-        <RouterLink to="/discover" class="btn btn-secondary">Browse Discover</RouterLink>
-      </EmptyState>
+      <div class="top" :class="{ solo: !hangouts?.length }">
+        <NextUpTicket :hangout="nextUp" />
 
-      <div class="groups" :class="{ duo }">
-      <section v-for="(list, key) in groups" v-show="list.length" :key="key" class="group" :class="'g-' + key" :aria-labelledby="`g-${key}`">
-        <h2 :id="`g-${key}`" class="group-title">{{ { action: 'Needs you', upcoming: 'Coming up', past: 'Past' }[key] }} <span class="count tnum">{{ list.length }}</span></h2>
-        <ul class="hangouts">
-          <li v-for="h in list" :key="h.id">
-            <RouterLink :to="`/h/${h.id}`" class="hcard" :class="[{ faded: key === 'past' }, 'st-' + h.stage]">
-              <div class="hc-top">
-                <span class="tag" :class="{ 'tag-mustard': h.stage === 'collecting', 'tag-tomato': h.stage === 'voting', 'tag-teal': h.stage === 'final' }">{{ STAGE_LABEL[h.stage] }}</span>
-                <span v-if="h.mode === 'solo'" class="tag">Solo</span>
-                <span v-else-if="h.visibility === 'public'" class="tag tag-plum">Open Jio</span>
-              </div>
-              <h3 class="hc-title">{{ h.title }}</h3>
-              <p class="hc-when tnum">{{ when(h) }}</p>
-              <p class="hc-where">Around {{ h.startArea.label }}</p>
-              <div class="hc-foot">
-                <span class="small muted tnum">
-                  <template v-if="h.mode === 'solo'">Just you</template>
-                  <template v-else>{{ h.memberCount }} {{ h.memberCount === 1 ? 'person' : 'people' }}<template v-if="h.stage === 'collecting'">, {{ h.respondedCount }} replied</template></template>
+        <section v-if="hangouts?.length" class="side" aria-labelledby="g-wait">
+          <h2 id="g-wait" class="sec-title">Waiting on you <span v-if="groups.action.length" class="count tnum">{{ groups.action.length }}</span></h2>
+          <ul v-if="groups.action.length" class="wait-list">
+            <li v-for="h in groups.action" :key="h.id">
+              <RouterLink :to="`/h/${h.id}`" class="wait-row">
+                <span class="w-main">
+                  <span class="w-title">{{ h.title }}</span>
+                  <span v-if="h.memberCount > 1" class="w-prog small">
+                    <span class="w-dots" aria-hidden="true"><i v-for="(on, i) in dots(h)" :key="i" :class="{ on }"></i></span>
+                    <span class="tnum">{{ h.respondedCount }} of {{ h.memberCount }} replied</span>
+                  </span>
                 </span>
-                <span v-if="needsMe(h)" class="cta">{{ needsMe(h) }}</span>
-                <UserAvatar v-else :user="h.host" :size="26" />
-              </div>
-            </RouterLink>
-          </li>
-        </ul>
-      </section>
+                <span class="w-go">{{ ACTION_LINK[needsMe(h)] }} <span aria-hidden="true">→</span></span>
+              </RouterLink>
+            </li>
+          </ul>
+          <p v-else class="calm">You're all caught up.</p>
+
+          <template v-if="comingUp.length">
+            <h3 class="sub-title">Coming up</h3>
+            <ul class="plain-list">
+              <li v-for="h in comingUp" :key="h.id">
+                <RouterLink :to="`/h/${h.id}`" class="plain-row">
+                  <span class="p-title">{{ h.title }}</span>
+                  <span class="p-when small tnum">{{ shortWhen(h) }}</span>
+                </RouterLink>
+              </li>
+            </ul>
+          </template>
+
+          <details v-if="groups.past.length" class="past">
+            <summary>Past <span class="tnum">({{ groups.past.length }})</span></summary>
+            <ul class="plain-list">
+              <li v-for="h in groups.past" :key="h.id">
+                <RouterLink :to="`/h/${h.id}`" class="plain-row">
+                  <span class="p-title">{{ h.title }}</span>
+                  <span class="p-when small tnum">{{ shortWhen(h) }}</span>
+                </RouterLink>
+              </li>
+            </ul>
+          </details>
+        </section>
       </div>
 
-      <section v-if="openJios.length || happening.length" class="group" aria-labelledby="g-open">
-        <div class="d-flex justify-content-between align-items-baseline gap-3 mb-3">
-          <h2 id="g-open" class="group-title m-0">What's happening?</h2>
-          <RouterLink to="/discover" class="small fw-bold">See all in Discover</RouterLink>
-        </div>
-        <ul class="hangouts">
-          <li v-for="o in openJios" :key="o.id">
-            <RouterLink :to="`/o/${o.hangoutId}`" class="hcard jio">
-              <div class="hc-top"><span class="tag tag-tomato">Open Jio</span><span class="small muted tnum">{{ spotsText(o.capacity, o.memberCount) }}</span></div>
-              <h3 class="hc-title">{{ o.title }}</h3>
-              <p class="hc-when tnum">{{ fmtRange(toMs(o.startsAt), toMs(o.endsAt)) }}</p>
-              <p class="hc-where">{{ o.address }}</p>
-              <div class="hc-foot">
-                <span class="small muted">{{ (o.interests || []).map(interestLabel).join(', ') }}</span>
-                <span class="cta">Have a look</span>
-              </div>
+      <WeekStrip :listings="weekListings" :hangouts="mineThisWeek" />
+
+      <section v-if="crews.length" class="crew" aria-labelledby="g-crew">
+        <h2 id="g-crew" class="sec-title">Your usual crew</h2>
+        <ul class="crew-list">
+          <li v-for="c in crews" :key="c.id">
+            <RouterLink :to="{ path: '/new', query: { again: c.id } }" class="crew-pill" :aria-label="`Jio again with ${c.people.map((p) => p.name.split(' ')[0]).join(', ')}: ${c.title}`">
+              <span class="stack" aria-hidden="true"><UserAvatar v-for="p in c.people.slice(0, 4)" :key="p.id" :user="p" :size="28" class="stacked" /></span>
+              <span class="c-title">{{ c.title }}</span>
+              <span class="c-go">Jio again</span>
             </RouterLink>
-          </li>
-          <li v-for="l in happening" :key="l.id">
-            <ListingCard :listing="l" compact>
-              <template #actions><RouterLink :to="{ path: '/discover', query: { q: l.title } }" class="btn btn-secondary btn-sm">View</RouterLink></template>
-            </ListingCard>
           </li>
         </ul>
       </section>
@@ -170,114 +184,81 @@ const greeting = computed(() => {
 <style scoped>
 .hello { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 20px; }
 .hello h1 { margin: 0; }
-.hello p { margin: 6px 0 0; color: var(--ink-2); max-width: 52ch; }
+.hello p { margin: 6px 0 0; color: var(--ink-2); max-width: 60ch; }
 .hello-art { flex: none; margin-bottom: -6px; }
-.starters { display: grid; gap: 12px; margin-bottom: 32px; }
-.starter {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  grid-template-rows: auto auto;
-  column-gap: 14px;
-  align-items: center;
-  padding: 16px 18px;
-  border-radius: var(--radius-lg);
-  border: 1px solid transparent;
-  text-decoration: none;
-  color: var(--ink);
-  box-shadow: var(--shadow-soft);
-  transition: transform var(--oj-t-feedback) var(--ease), box-shadow var(--oj-t-quick) var(--ease);
-}
-.starter:hover { color: var(--ink); box-shadow: var(--shadow-pop); }
-.starter:active { transform: scale(0.98); }
-.s-ico {
-  grid-row: span 2;
-  display: grid;
-  place-items: center;
-  width: 52px;
-  height: 52px;
-  border-radius: 16px;
-  background: var(--card);
-  transform: rotate(-4deg);
-  box-shadow: 0 2px 0 rgba(var(--oj-shadow-rgb), 0.08);
-}
-.s-create { background: var(--tomato); color: var(--on-accent); }
-.s-create:hover { color: var(--on-accent); }
-.s-create .s-ico { color: var(--tomato-ink); }
-.s-create .s-sub { color: color-mix(in srgb, var(--on-accent) 78%, var(--tomato)); }
-.s-find { background: var(--teal-soft); border-color: color-mix(in srgb, var(--teal) 30%, transparent); }
-.s-find .s-ico { color: var(--teal-ink); transform: rotate(3deg); }
-.s-discover { background: var(--mustard-soft); border-color: color-mix(in srgb, var(--mustard) 30%, transparent); }
-.s-discover .s-ico { color: var(--mustard-ink); transform: rotate(-2deg); }
-.s-title { font-family: var(--font-display); font-weight: 900; font-size: 1.25rem; line-height: 1.2; }
-.s-sub { color: var(--ink-2); font-size: 0.92rem; }
-.group { margin-bottom: 32px; }
-.group-title { font-size: 1.25rem; margin-bottom: 12px; display: inline-flex; align-items: center; gap: 8px; }
-.group-title .count {
+.top { display: grid; gap: 28px; margin-bottom: 32px; align-items: start; }
+.sec-title { font-size: 1.25rem; margin: 0 0 12px; display: flex; align-items: center; gap: 8px; }
+.count {
   font-family: var(--font-body);
   font-size: 0.8rem;
   font-weight: 700;
   padding: 1px 8px;
   border-radius: 999px;
-  background: var(--paper-2);
-  color: var(--ink-2);
+  background: var(--tomato-soft);
+  color: var(--tomato-ink);
 }
-.hangouts { list-style: none; padding: 0; margin: 0; display: grid; gap: 12px; }
-.hcard {
+.sub-title { font-size: 0.95rem; margin: 22px 0 8px; color: var(--ink-2); }
+.calm { margin: 0; color: var(--ink-2); }
+.wait-list, .plain-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
+.wait-row {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
-  height: 100%;
-  padding: 16px 18px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
   background: var(--card);
   border: 1px solid var(--line);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-soft);
+  border-radius: 14px;
   color: var(--ink);
   text-decoration: none;
-  transition: box-shadow var(--oj-t-quick) var(--ease), border-color var(--oj-t-quick);
+  transition: border-color var(--oj-t-quick), box-shadow var(--oj-t-quick);
 }
-.hcard:hover { border-color: var(--line-strong); box-shadow: var(--shadow-pop); color: var(--ink); }
-.hcard.faded { opacity: 0.72; box-shadow: none; }
-.hc-top { display: flex; gap: 6px; align-items: center; justify-content: space-between; }
-.hc-top .tag + .tag { margin-right: auto; }
-.hc-title { margin: 6px 0 0; font-size: 1.2rem; }
-.hc-when { margin: 0; font-weight: 600; font-size: 0.95rem; }
-.hc-where { margin: 0; color: var(--ink-2); font-size: 0.9rem; }
-.hc-foot { margin-top: auto; padding-top: 12px; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
-.cta {
-  font-weight: 700;
-  font-size: 0.85rem;
-  color: var(--tomato-ink);
-  background: var(--tomato-soft);
-  padding: 4px 10px;
+.wait-row:hover { border-color: var(--line-strong); box-shadow: var(--shadow-soft); color: var(--ink); }
+.w-main { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.w-title { font-weight: 800; font-size: 1.02rem; overflow-wrap: anywhere; }
+.w-prog { display: inline-flex; align-items: center; gap: 8px; color: var(--ink-2); }
+.w-dots { display: inline-flex; gap: 4px; }
+.w-dots i { width: 9px; height: 9px; border-radius: 50%; border: 1.5px solid var(--tomato); }
+.w-dots i.on { background: var(--tomato); }
+.w-go { flex: none; font-weight: 700; font-size: 0.9rem; color: var(--tomato-ink); text-align: right; }
+.wait-row:hover .w-go { text-decoration: underline; }
+.plain-row { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 6px 2px; color: var(--ink); text-decoration: none; border-bottom: 1px dashed var(--line); }
+.plain-row:hover { color: var(--tomato-ink); }
+.p-title { font-weight: 700; overflow-wrap: anywhere; }
+.p-when { flex: none; color: var(--ink-2); }
+.past { margin-top: 18px; }
+.past summary { cursor: pointer; font-weight: 700; font-size: 0.92rem; color: var(--ink-2); min-height: 32px; }
+.past .plain-list { margin-top: 6px; opacity: 0.8; }
+.crew { margin-bottom: 32px; }
+.crew-list { list-style: none; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 10px; }
+.crew-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  padding: 8px 8px 8px 12px;
+  background: var(--card);
+  border: 1px solid var(--line-strong);
   border-radius: 999px;
-  white-space: nowrap;
+  color: var(--ink);
+  text-decoration: none;
+  transition: border-color var(--oj-t-quick), box-shadow var(--oj-t-quick), transform var(--oj-t-feedback);
 }
-/* Below 768px the bottom nav already offers these, so the starters shrink to one row of small tiles
-   and the hangouts that need you come up within the first screen. */
-@media (max-width: 767.98px) {
-  .starters { grid-template-columns: repeat(3, 1fr); gap: 8px; }
-  .starter { grid-template-columns: 1fr; grid-template-rows: auto auto; justify-items: center; row-gap: 6px; padding: 12px 6px; text-align: center; }
-  .s-ico { grid-row: auto; width: 40px; height: 40px; border-radius: 12px; }
-  .s-title { font-size: 0.95rem; }
-  .s-sub { display: none; }
-}
+.crew-pill:hover { border-color: var(--tomato); box-shadow: var(--shadow-soft); color: var(--ink); }
+.crew-pill:active { transform: scale(0.98); }
+.stack { display: inline-flex; }
+.stack .stacked { margin-left: -6px; box-shadow: 0 0 0 2px var(--card); }
+.stack .stacked:first-child { margin-left: 0; }
+.c-title { font-weight: 800; min-width: 0; }
+.c-go { white-space: nowrap; margin-left: auto; font-weight: 700; font-size: 0.85rem; padding: 5px 12px; border-radius: 999px; background: var(--tomato-soft); color: var(--tomato-ink); }
 @media (max-width: 575.98px) {
   .hello-art { width: 64px; height: 64px; }
-}
-@media (min-width: 768px) {
-  .starters { grid-template-columns: 1.3fr 1fr 1fr; }
-  .starter { grid-template-columns: 1fr; grid-template-rows: auto auto auto; row-gap: 4px; align-items: start; padding: 20px; }
-  .s-ico { grid-row: auto; margin-bottom: 10px; }
-  .hangouts { grid-template-columns: repeat(2, 1fr); }
+  .top { gap: 24px; }
+  .crew-list li, .crew-pill { width: 100%; }
+  .w-go { max-width: 9ch; }
 }
 @media (min-width: 992px) {
-  /* Needs you and Coming up sit side by side, each a single stack of cards. */
-  .groups.duo { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 24px; align-items: start; }
-  .groups.duo .g-past { grid-column: 1 / -1; }
-  .groups.duo .g-action .hangouts, .groups.duo .g-upcoming .hangouts { grid-template-columns: 1fr; }
-}
-@media (min-width: 1100px) {
-  .hangouts { grid-template-columns: repeat(3, 1fr); }
+  .top { grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 32px; }
+  .top.solo { grid-template-columns: minmax(0, 3fr); }
 }
 </style>

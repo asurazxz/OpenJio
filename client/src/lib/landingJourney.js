@@ -1,6 +1,6 @@
 // A finite storyboard: read a checkpoint, trace a leg, then read the next stop.
-const DWELL = 2800
-const TRAVEL = 1200
+const DWELL = 2200
+const TRAVEL = 900
 const FADE = 280
 export const JOURNEY_DURATION = 3 * DWELL + 2 * TRAVEL
 

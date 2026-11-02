@@ -16,7 +16,7 @@ test('Mei finds an Open Jio, joins it and votes on a stop', async ({ page }) => 
 
   const card = page.getByRole('listitem').filter({ has: page.getByRole('heading', { name: 'Sunday Chinatown wander' }) })
   await expect(card).toBeVisible()
-  await card.getByRole('button', { name: 'View', exact: true }).click()
+  await card.getByRole('button', { name: 'Join', exact: true }).click()
 
   await expect(page).toHaveURL(/\/o\/h-hawker$/)
   await expect(page.getByText('Hosted by Priya Raman')).toBeVisible()
