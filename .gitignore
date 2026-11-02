@@ -12,3 +12,5 @@ pipeline/out/
 server/.cache/
 test-results/
 playwright-report/
+supabase/.temp/
+supabase/.branches/
