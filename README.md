@@ -1,10 +1,49 @@
-# OpenJio — live installation
+# OpenJio
 
-Plan a Singapore outing together: find a common time, build a feasible route, vote on stops, and help late joiners meet the group. The current UI targets **desktop**.
+**Plan a Singapore outing together.** Find a time that works, agree on stops, and share one clear plan with everyone.
 
-This is the **`main` branch**: real accounts and live provider data, with no seeded users, outings or sample listings. OpenJio is an independent personal project; keep service and hosting costs at **$0** using existing hardware.
+OpenJio helps a group go from *“free this weekend?”* to *“see you there.”* Everyone gets one link for availability, votes, and the final itinerary.
+The current UI is designed for desktop use.
+
+![OpenJio landing page showing a sample Marina Bay outing](docs/images/landing-page.png)
+
+## How it works
+
+1. **Find a time:** everyone marks when they are free; the best overlap rises to the top.
+2. **Shape the plan:** review the stops, vote to keep or swap them, and confirm the group plan.
+3. **Meet up:** share the itinerary, with an estimate to help late joiners catch up.
+
+The examples below are clearly labelled illustrations using made-up people and places. They are separate from live listings.
+
+![OpenJio's three illustrated planning steps](docs/images/how-it-works.png)
+
+<details>
+<summary>Watch the examples animate</summary>
+
+![Animated walkthrough of OpenJio's time, plan, and late-join examples](docs/images/how-it-works.gif)
+
+</details>
+
+## Tech stack
+
+<p>
+  <a href="https://vuejs.org/"><img alt="Vue 3" src="https://img.shields.io/badge/Vue.js-3-4FC08D?style=for-the-badge&logo=vuedotjs&logoColor=white"></a>
+  <a href="https://vite.dev/"><img alt="Vite" src="https://img.shields.io/badge/Vite-646CFF?style=for-the-badge&logo=vite&logoColor=white"></a>
+  <a href="https://getbootstrap.com/"><img alt="Bootstrap" src="https://img.shields.io/badge/Bootstrap-7952B3?style=for-the-badge&logo=bootstrap&logoColor=white"></a>
+  <a href="https://leafletjs.com/"><img alt="Leaflet" src="https://img.shields.io/badge/Leaflet-199900?style=for-the-badge&logo=leaflet&logoColor=white"></a>
+  <a href="https://nodejs.org/"><img alt="Node.js" src="https://img.shields.io/badge/Node.js-339933?style=for-the-badge&logo=nodedotjs&logoColor=white"></a>
+  <a href="https://expressjs.com/"><img alt="Express" src="https://img.shields.io/badge/Express-000000?style=for-the-badge&logo=express&logoColor=white"></a>
+  <a href="https://supabase.com/"><img alt="Supabase" src="https://img.shields.io/badge/Supabase-3FCF8E?style=for-the-badge&logo=supabase&logoColor=white"></a>
+  <a href="https://www.postgresql.org/"><img alt="PostgreSQL" src="https://img.shields.io/badge/PostgreSQL-4169E1?style=for-the-badge&logo=postgresql&logoColor=white"></a>
+  <a href="https://www.python.org/"><img alt="Python" src="https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white"></a>
+  <a href="https://www.docker.com/"><img alt="Docker Compose" src="https://img.shields.io/badge/Docker_Compose-2496ED?style=for-the-badge&logo=docker&logoColor=white"></a>
+</p>
+
+OneMap/Singapore Land Authority supplies maps, address lookup and routes. Geoapify supplies OpenStreetMap places, and NEA/data.gov.sg supplies weather.
 
 ## Choose the right installation
+
+This is the **`main` branch**: real accounts and live provider data, with no seeded users, outings or sample listings. OpenJio is an independent personal project; keep service and hosting costs at **$0** using existing hardware.
 
 | Branch | Data and accounts | Fresh-install URL | Setup |
 |---|---|---|---|
@@ -90,4 +129,4 @@ pnpm --dir client build
 
 ## Sources and credits
 
-Built with Vue, Vite, Bootstrap, Leaflet, Express, Supabase/PostgreSQL and Python. Fonts: Nunito and DM Sans. OneMap/Singapore Land Authority supplies maps/address lookup/routes, Geoapify supplies OpenStreetMap places, and NEA/data.gov.sg supplies weather. Deals/events retain public Telegram/confirmgood source links. Preserve provider attribution. Landing illustrations and synthetic algorithm fixtures are labelled examples, separate from the live catalogue.
+Fonts: Nunito and DM Sans. Deals and events retain links to their public Telegram/confirmgood sources; preserve provider attribution. Landing illustrations and synthetic algorithm fixtures are labelled examples, separate from the live catalogue.
