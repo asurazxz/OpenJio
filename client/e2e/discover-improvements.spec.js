@@ -179,10 +179,14 @@ test('the in-view list follows Search this area, and hovering a row lights its p
   await expect(page.getByRole('button', { name: 'Search this area' })).toHaveCount(0)
   // Hovering a row emphasises the matching pin.
   // The best match can sit inside a cluster, so pick the row of a pin that is drawn.
-  const drawn = await page.locator('.leaflet-marker-icon:not(.oj-cluster)').evaluateAll((els) => els.map((el) => el.getAttribute('aria-label')))
-  const listed = await rail.locator('li .title').allTextContents()
-  const title = drawn.find((t) => listed.includes(t))
-  expect(listed.length).toBeLessThanOrEqual(12)
+  // Pins draw after the page fades in, so wait for one that is also in the short list.
+  let title
+  await expect.poll(async () => {
+    const drawn = await page.locator('.leaflet-marker-icon:not(.oj-cluster)').evaluateAll((els) => els.map((el) => el.getAttribute('aria-label')))
+    const listed = await rail.locator('li .title').allTextContents()
+    title = drawn.find((t) => listed.includes(t))
+    return Boolean(title) && listed.length <= 12
+  }).toBe(true)
   const row = rail.locator('li button').filter({ has: page.locator('.title', { hasText: title }) }).first()
   await row.hover()
   await expect(page.locator(`.leaflet-marker-icon[aria-label="${title}"] .map-pill.hot`)).toHaveCount(1)

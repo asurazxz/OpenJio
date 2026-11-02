@@ -17,7 +17,11 @@ const routes = [
 const router = createRouter({
   history: createWebHistory(),
   routes,
-  scrollBehavior: (to, from, saved) => saved || (to.path !== from.path ? { top: 0 } : undefined),
+  // Waits for the outgoing page to fade (App.vue, 120 ms) so the jump is not seen; never animated.
+  scrollBehavior: (to, from, saved) => {
+    if (!saved && to.path === from.path) return undefined
+    return new Promise((resolve) => setTimeout(() => resolve({ ...(saved || { top: 0 }), behavior: 'instant' }), 130))
+  },
 })
 
 router.beforeEach((to) => {

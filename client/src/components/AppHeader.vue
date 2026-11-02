@@ -16,6 +16,8 @@ const user = computed(() => {
   return session.userId ? currentUser() : null
 })
 const menuOpen = ref(false)
+const scrolled = ref(false)
+const onScroll = () => { scrolled.value = window.scrollY > 4 }
 const menuEl = ref(null)
 const theme = ref(getTheme())
 const refreshTheme = () => { theme.value = getTheme() }
@@ -38,11 +40,14 @@ function onKey(e) {
   }
 }
 onMounted(() => {
+  onScroll()
+  window.addEventListener('scroll', onScroll, { passive: true })
   document.addEventListener('click', onDoc)
   document.addEventListener('keydown', onKey)
   window.addEventListener('openjio:theme-change', refreshTheme)
 })
 onBeforeUnmount(() => {
+  window.removeEventListener('scroll', onScroll)
   document.removeEventListener('click', onDoc)
   document.removeEventListener('keydown', onKey)
   window.removeEventListener('openjio:theme-change', refreshTheme)
@@ -79,7 +84,7 @@ function isActive(key) {
 </script>
 
 <template>
-  <header class="app-header">
+  <header class="app-header" :class="{ scrolled }">
     <div class="inner">
       <RouterLink to="/" class="brand" aria-label="OpenJio home">
         <OpenJioWordmark :size="32" />
@@ -127,7 +132,9 @@ function isActive(key) {
   background: color-mix(in srgb, var(--paper) 88%, transparent);
   backdrop-filter: saturate(1.2) blur(8px);
   border-bottom: 1px solid var(--line);
+  transition: box-shadow var(--oj-t-standard) var(--ease);
 }
+.app-header.scrolled { box-shadow: 0 6px 18px rgba(var(--oj-shadow-rgb), 0.08); }
 .inner {
   max-width: 1200px;
   margin: 0 auto;

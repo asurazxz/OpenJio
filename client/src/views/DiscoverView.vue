@@ -226,7 +226,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 // Hovering a pin lights its row too; bring that row into the visible part of the list.
 function onPinHover(id) {
   hoverId.value = id
-  if (id) document.getElementById(`row-${id}`)?.scrollIntoView({ block: 'nearest' })
+  if (id) document.getElementById(`row-${id}`)?.scrollIntoView({ block: 'nearest', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' })
 }
 function onView({ bounds, user: byUser }) {
   if (view.value !== 'map') return

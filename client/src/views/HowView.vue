@@ -1,8 +1,13 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
+import { vReveal } from '../composables/useReveal.js'
 import { runItineraryEvaluation, runSlotEvaluation } from '../lib/algo/evaluate.js'
 import { WEIGHTS } from '../lib/algo/itinerary.js'
 import { fmtRange } from '../lib/time.js'
+
+// As on the landing page: starting states apply only after mount, so content shows without JS.
+const ready = ref(false)
+onMounted(() => { ready.value = true })
 
 const itin = ref([])
 const slots = ref([])
@@ -19,37 +24,37 @@ const better = (a, b, higher = true) => a != null && b != null && (higher ? a > 
 </script>
 
 <template>
-  <div class="page">
+  <div class="page how-page" :class="{ 'reveal-ready': ready }">
     <header class="page-head">
-      <h1>How OpenJio plans</h1>
-      <p>A time you can make, a plan you can change, and a clear place to meet.</p>
+      <h1 class="hero-in" style="--in-delay: 0ms">How OpenJio plans</h1>
+      <p class="hero-in" style="--in-delay: 70ms">A time you can make, a plan you can change, and a clear place to meet.</p>
     </header>
 
     <section aria-labelledby="journey-heading" data-tour="how-overview">
-      <h2 id="journey-heading" class="journey-heading">From group chat to going out</h2>
+      <h2 id="journey-heading" class="journey-heading hero-in" style="--in-delay: 140ms">From group chat to going out</h2>
       <div class="steps-grid">
-        <article class="card-x story-step">
+        <article v-reveal="0" class="card-x story-step">
           <h3 class="step-label"><span class="step-number">1</span> Find a time</h3>
           <figure class="availability-example" role="img" aria-label="Example group availability">
-            <div class="example-grid"><span></span><span>Fri</span><span>Sat</span><span>Sun</span><span>Mei</span><span class="free">✓</span><span class="free best">✓</span><span class="unknown">?</span><span>Arjun</span><span class="busy">—</span><span class="free best">✓</span><span class="free">✓</span><span>Farah</span><span class="free">✓</span><span class="free best">✓</span><span class="busy">—</span></div>
+            <div class="example-grid"><span></span><span>Fri</span><span>Sat</span><span>Sun</span><span>Mei</span><span class="free" style="--i: 0">✓</span><span class="free best" style="--i: 1">✓</span><span class="unknown" style="--i: 2">?</span><span>Arjun</span><span class="busy" style="--i: 3">—</span><span class="free best" style="--i: 4">✓</span><span class="free" style="--i: 5">✓</span><span>Farah</span><span class="free" style="--i: 6">✓</span><span class="free best" style="--i: 7">✓</span><span class="busy" style="--i: 8">—</span></div>
             <figcaption><span class="tag tag-teal">Saturday · 3 of 3 free</span></figcaption>
           </figure>
           <p>Mark when you would actually go out, and we suggest the best overlap.</p>
         </article>
-        <article class="card-x story-step">
+        <article v-reveal="90" class="card-x story-step">
           <h3 class="step-label"><span class="step-number">2</span> Shape the outing</h3>
-          <figure class="timeline-example" role="img" aria-label="Example outing timeline"><ol><li><time>2:00</time><span class="example-dot"></span><span><strong>A little art</strong><small>Gallery · 60 min</small></span></li><li class="travel"><time></time><span>↓</span><small>20 min travel</small></li><li><time>3:20</time><span class="example-dot meal"></span><span><strong>Kopi and a catch-up</strong><small>Cafe · 60 min</small></span></li></ol><figcaption>Opening hours + travel + your interests</figcaption></figure>
+          <figure class="timeline-example" role="img" aria-label="Example outing timeline"><ol><li style="--i: 0"><time>2:00</time><span class="example-dot"></span><span><strong>A little art</strong><small>Gallery · 60 min</small></span></li><li class="travel" style="--i: 1"><time></time><span>↓</span><small>20 min travel</small></li><li style="--i: 2"><time>3:20</time><span class="example-dot meal"></span><span><strong>Kopi and a catch-up</strong><small>Cafe · 60 min</small></span></li></ol><figcaption>Opening hours + travel + your interests</figcaption></figure>
           <p>Generate an outing or pick the stops yourself, and preview any swap first.</p>
         </article>
-        <article class="card-x story-step">
+        <article v-reveal="180" class="card-x story-step">
           <h3 class="step-label"><span class="step-number">3</span> Agree and go</h3>
-          <figure class="votes-example" role="img" aria-label="Example group voting"><div class="example-stop">Kopi and a catch-up</div><div class="example-votes"><span class="keep">✓ Keep <strong>3</strong></span><span class="swap">↻ Swap <strong>0</strong></span></div><div class="confirmed-example">Host confirms the plan <span aria-hidden="true">→</span></div><figcaption>Running late? Find a stop you can still reach.</figcaption></figure>
+          <figure class="votes-example" role="img" aria-label="Example group voting"><div class="example-stop">Kopi and a catch-up</div><div class="example-votes"><span class="keep">✓ Keep <strong class="keep-count" aria-hidden="true"></strong></span><span class="swap">↻ Swap <strong>0</strong></span></div><div class="confirmed-example">Host confirms the plan <span aria-hidden="true">→</span></div><figcaption>Running late? Find a stop you can still reach.</figcaption></figure>
           <p>Vote on each stop, the host confirms, and late joiners get a reachable meeting point.</p>
         </article>
       </div>
     </section>
 
-    <details class="benchmarks" @toggle="evaluate">
+    <details v-reveal class="benchmarks" @toggle="evaluate">
       <summary>See the algorithm comparison</summary>
       <p class="small muted mt-3">Optional technical detail. These examples explain the trade-offs; they are not a guarantee of the best possible plan.</p>
     <section class="card-x mt-4" aria-labelledby="score-h">
@@ -152,7 +157,7 @@ const better = (a, b, higher = true) => a != null && b != null && (higher ? a > 
 
     </details>
 
-    <section class="mt-4 card-x" aria-labelledby="data-h">
+    <section v-reveal class="mt-4 card-x" aria-labelledby="data-h">
       <h2 id="data-h" class="h3">Where listings come from</h2>
       <ul class="mb-2">
         <li><strong>Sample data:</strong> real public places with approximate hours, plus made-up events and deals so the demo works offline. Marked "Sample data".</li>
@@ -226,5 +231,42 @@ figcaption { font-size: .75rem; text-align: center; margin-top: 16px; color: var
 .win { font-weight: 800; color: var(--teal); }
 @media (min-width: 900px) {
   .steps-grid { grid-template-columns: repeat(3, 1fr); }
+}
+
+/* Motion, matching the landing page: the heading rises in on load, cards rise in as they scroll
+   into view, and each card's example plays once after its card arrives (--reveal-delay is the
+   card's stagger). Nothing is hidden before mount or under reduced motion. */
+[data-reveal] { transition: opacity 480ms var(--ease) var(--reveal-delay, 0ms), transform 480ms var(--ease) var(--reveal-delay, 0ms); }
+.reveal-ready [data-reveal]:not(.is-revealed) { opacity: 0; transform: translateY(16px); }
+.reveal-ready .hero-in { animation: hero-in 480ms var(--ease) var(--in-delay, 0ms) both; }
+@keyframes hero-in { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+
+.story-step { --play: calc(var(--reveal-delay, 0ms) + 380ms); }
+/* 1. Find a time: replies fill in row by row, then the shared Saturday lights up. */
+.is-revealed .example-grid [style*='--i'] { animation: cell-in 260ms var(--oj-ease-stamp) calc(var(--play) + var(--i) * 70ms) both; }
+.is-revealed .example-grid .best { animation: cell-in 260ms var(--oj-ease-stamp) calc(var(--play) + var(--i) * 70ms) both, best-on 360ms var(--ease) calc(var(--play) + 760ms) both; }
+.is-revealed .availability-example figcaption { animation: hero-in 360ms var(--ease) calc(var(--play) + 900ms) both; }
+@keyframes cell-in { from { opacity: 0; transform: scale(.6); } to { opacity: 1; transform: none; } }
+@keyframes best-on { from { box-shadow: inset 0 0 0 0 var(--teal); } to { box-shadow: inset 0 0 0 1px var(--teal); } }
+/* 2. Shape the outing: stops slide in in order, with the travel leg between them. */
+.is-revealed .timeline-example li { animation: stop-in 380ms var(--ease) calc(var(--play) + var(--i) * 260ms) both; }
+.is-revealed .timeline-example .example-dot { animation: cell-in 260ms var(--oj-ease-stamp) calc(var(--play) + var(--i) * 260ms + 120ms) both; }
+.is-revealed .timeline-example figcaption { animation: hero-in 360ms var(--ease) calc(var(--play) + 820ms) both; }
+@keyframes stop-in { from { opacity: 0; transform: translateX(-12px); } to { opacity: 1; transform: none; } }
+/* 3. Agree and go: votes stamp in, Keep counts up to 3, then the host confirms. */
+@property --keep { syntax: '<integer>'; inherits: false; initial-value: 3; }
+.keep-count { --keep: 3; counter-reset: keep var(--keep); }
+.keep-count::after { content: counter(keep); }
+.is-revealed .example-votes span { animation: stamp-in 300ms var(--oj-ease-stamp) var(--play) both; }
+.is-revealed .example-votes .swap { animation-delay: calc(var(--play) + 120ms); }
+.is-revealed .keep-count { animation: count-up 700ms steps(3, end) calc(var(--play) + 200ms) both; }
+.is-revealed .confirmed-example { animation: hero-in 360ms var(--ease) calc(var(--play) + 1000ms) both; }
+.is-revealed .votes-example figcaption { animation: hero-in 360ms var(--ease) calc(var(--play) + 1200ms) both; }
+@keyframes stamp-in { from { opacity: 0; transform: scale(1.25) rotate(-4deg); } to { opacity: 1; transform: none; } }
+@keyframes count-up { from { --keep: 0; } to { --keep: 3; } }
+
+@media (prefers-reduced-motion: reduce) {
+  [data-reveal] { transition: none; }
+  .reveal-ready .hero-in, .is-revealed :is(.example-grid span, .timeline-example li, .example-dot, figcaption, .example-votes span, .keep-count, .confirmed-example) { animation: none; }
 }
 </style>

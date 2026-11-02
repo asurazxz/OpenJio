@@ -212,7 +212,7 @@ a:hover { color: var(--tomato-ink); text-decoration-color: var(--tomato); }
   line-height: 1.2;
   cursor: pointer;
   user-select: none;
-  transition: background-color var(--oj-t-quick), border-color var(--oj-t-quick), color var(--oj-t-quick);
+  transition: background-color var(--oj-t-quick), border-color var(--oj-t-quick), color var(--oj-t-quick), transform var(--oj-t-feedback) var(--ease);
 }
 .chip:hover { border-color: var(--line-strong); background: var(--paper-2); }
 .chip[aria-pressed='true'], .chip.active {
@@ -290,6 +290,32 @@ a:hover { color: var(--tomato-ink); text-decoration-color: var(--tomato); }
 
 .oj-step-enter-active { transition: opacity var(--oj-t-standard) var(--ease), transform var(--oj-t-standard) var(--ease); }
 .oj-step-enter-from { opacity: 0; transform: translateX(12px); }
+
+/* Page changes: the old page fades out quickly, the new one fades in with a 6px rise. */
+.oj-page-enter-active { transition: opacity 220ms var(--ease), transform 220ms var(--ease); }
+.oj-page-leave-active { transition: opacity 120ms ease-in; }
+.oj-page-enter-from { opacity: 0; transform: translateY(6px); }
+.oj-page-leave-to { opacity: 0; }
+
+/* In-page jumps (anchors, "Show on grid", list rows) glide; route changes stay instant (router.js). */
+@media (prefers-reduced-motion: no-preference) {
+  html { scroll-behavior: smooth; }
+}
+
+/* Scroll reveal (lib/scrollReveal.js): only below-the-fold content, once, 12px. Revealed elements
+   drop the transform entirely so sticky and fixed children behave normally afterwards. */
+.reveal-ready [data-reveal='auto'] { transition: opacity 420ms var(--ease) var(--reveal-delay, 0ms), transform 420ms var(--ease) var(--reveal-delay, 0ms); }
+.reveal-ready [data-reveal='auto']:not(.is-revealed) { opacity: 0; transform: translateY(12px); }
+
+/* Interactive cards lift a little under the pointer and press back down. */
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  #main :is(.listing, .wait-row, .crew-pill, .week .item, .story-step) {
+    transition: transform var(--oj-t-quick) var(--ease), box-shadow var(--oj-t-quick) var(--ease), border-color var(--oj-t-quick) var(--ease), background-color var(--oj-t-quick) var(--ease);
+  }
+  #main :is(.listing, .wait-row, .crew-pill, .week .item, .story-step):hover { transform: translateY(-2px); box-shadow: var(--shadow-pop); }
+  #main :is(.listing, .wait-row, .crew-pill, .week .item):active { transform: translateY(0) scale(0.99); }
+}
+.chip:active { transform: scale(0.96); }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
