@@ -8,9 +8,12 @@ async function home(page) {
 }
 
 test('Home theme resolves explicitly and survives reload and route changes without a dimming layer', async ({ page }) => {
-  await page.emulateMedia({ colorScheme: 'light' })
+  await page.emulateMedia({ colorScheme: 'dark' })
   await home(page)
-  for (const mode of ['light', 'dark', 'system']) {
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light')
+  await expect(page.getByRole('button', { name: 'Theme: light', exact: true })).toBeVisible()
+  await page.emulateMedia({ colorScheme: 'light' })
+  for (const mode of ['dark', 'system', 'light']) {
     await page.getByRole('button', { name: /^Theme:/ }).click()
     const resolved = mode === 'dark' ? 'dark' : 'light'
     await expect(page.locator('html')).toHaveAttribute('data-theme', resolved)
@@ -22,7 +25,11 @@ test('Home theme resolves explicitly and survives reload and route changes witho
     await expect(page.locator('dialog[open]')).toHaveCount(0)
   }
   await page.emulateMedia({ colorScheme: 'dark' })
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light')
+  await page.getByRole('button', { name: 'Theme: light', exact: true }).click()
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+  await page.getByRole('button', { name: 'Theme: dark', exact: true }).click()
+  await expect(page.getByRole('button', { name: 'Theme: system', exact: true })).toBeVisible()
   await page.goto('/discover')
   await page.goto('/')
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')

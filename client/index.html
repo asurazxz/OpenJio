@@ -1,19 +1,19 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="light">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#FFF8F1" media="(prefers-color-scheme: light)" />
-    <meta name="theme-color" content="#1C1917" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#FFF8F1" />
     <script>
       (function () {
         var t = null
         try { t = localStorage.getItem('openjio:theme') } catch (e) {}
-        if (['system', 'light', 'dark'].indexOf(t) === -1) t = 'system'
-        var d = t === 'dark' || ((!t || t === 'system') && matchMedia('(prefers-color-scheme: dark)').matches)
+        if (['system', 'light', 'dark'].indexOf(t) === -1) t = 'light'
+        var d = t === 'dark' || (t === 'system' && matchMedia('(prefers-color-scheme: dark)').matches)
         document.documentElement.setAttribute('data-theme', d ? 'dark' : 'light')
         document.documentElement.setAttribute('data-theme-choice', t)
         document.documentElement.setAttribute('data-bs-theme', d ? 'dark' : 'light')
+        document.querySelector('meta[name="theme-color"]').content = d ? '#1C1917' : '#FFF8F1'
       })()
     </script>
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
