@@ -1,0 +1,18 @@
+# Always use scripts/demo.mjs: it fixes the project name and separate key file.
+services:
+  migrate:
+    volumes:
+      - ./docker/demo-schema.sql:/extra-migrations/zz_demo.sql:ro
+      - ./docker/demo-safe-reset.sql:/extra-migrations/zzz_demo_safe_reset.sql:ro
+  api:
+    environment:
+      OPENJIO_DEMO_ENABLED: "1"
+      OPENJIO_DEMO_PASSWORD: ${OPENJIO_DEMO_PASSWORD:-OpenJioDemo123!}
+      INGEST_ENABLED: "false"
+      GEOAPIFY_API_KEY: ""
+      GEMINI_API_KEY: ""
+      ONEMAP_EMAIL: ""
+      ONEMAP_PASSWORD: ""
+  web:
+    environment:
+      OPENJIO_DEMO_ENABLED: "1"

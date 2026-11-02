@@ -10,7 +10,7 @@ create schema if not exists openjio_migrations;
 revoke all on schema openjio_migrations from public, anon, authenticated;
 create table if not exists openjio_migrations.applied(name text primary key, checksum text not null, applied_at timestamptz not null default now());
 SQL
-for migration in /migrations/*.sql; do
+for migration in /migrations/*.sql /extra-migrations/*.sql; do
   [ -f "$migration" ] || continue
   name=$(basename "$migration")
   case "$name" in *[!a-zA-Z0-9_.-]*) echo 'Invalid migration filename' >&2; exit 1;; esac

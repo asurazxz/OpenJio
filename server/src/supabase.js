@@ -25,6 +25,8 @@ export function createSupabaseRepository({ url, key, fetchImpl = fetch }) {
   }
   return {
     configured,
+    demoInfo() { return send('/rest/v1/rpc/openjio_demo_info', {}); },
+    resetDemo(actorId, fixture) { return send('/rest/v1/rpc/openjio_demo_reset', { p_actor: actorId, p_fixture: fixture }); },
     syncListings(listings) {
       return send('/rest/v1/rpc/openjio_sync_live_listings', { p_listings: listings });
     },

@@ -1,6 +1,7 @@
 import express from 'express';
 import { createSupabaseRepository } from './supabase.js';
 import { createHostedService } from './hosted.js';
+import { createDemoService } from './demo-service.js';
 import { createPlanningTravel } from './planning-travel.js';
 import { createLiveCatalogueSync } from './live-sync.js';
 import { readFile } from 'node:fs/promises';
@@ -26,6 +27,8 @@ const DRAFTS_FILE = path.resolve(here, '../../pipeline/out/drafts.json');
 const ALLOWED_ORIGINS = new Set(['http://localhost:5173', 'http://127.0.0.1:5173', ...(process.env.ALLOWED_ORIGINS || '').split(',').map(s => s.trim()).filter(Boolean)]);
 const sharedMode = process.env.DATA_MODE === 'supabase';
 const repository = createSupabaseRepository({ url: process.env.SUPABASE_URL, key: process.env.SUPABASE_SERVICE_ROLE_KEY });
+const databaseDemo = process.env.OPENJIO_DEMO_ENABLED === '1';
+const demoService = createDemoService({ enabled: databaseDemo, repository });
 // Built only when GEOAPIFY_API_KEY is set; without it list() returns [].
 let placesCatalogue;
 try {
@@ -46,7 +49,7 @@ const hosted = createHostedService({
   readDrafts,
   travel: createPlanningTravel,
   fetchPlaces: async () => placesCatalogue.list(),
-  syncCatalogue: sharedMode ? createLiveCatalogueSync({ repository, fetchPlaces: async () => placesCatalogue.list(), readDrafts }) : null,
+  syncCatalogue: sharedMode && !databaseDemo ? createLiveCatalogueSync({ repository, fetchPlaces: async () => placesCatalogue.list(), readDrafts }) : null,
 });
 const PORT = Number(process.env.PORT) || 8787;
 const places = createPlaceSearch();
@@ -145,7 +148,9 @@ app.get('/api/ready', (req, res) => res.json({ ok: true, mode: sharedMode ? 'sup
 app.post('/api/app/:operation', async (req, res) => {
   const authorization = req.get('Authorization');
   if (authorization && !/^Bearer [^\s]+$/.test(authorization)) return res.status(401).json({ error: 'auth', message: 'Please sign in again.' });
-  const result = await hosted.execute({ token: authorization?.slice(7), operation: req.params.operation, args: req.body?.args });
+  const result = req.params.operation === 'resetDemo'
+    ? await demoService.reset(authorization?.slice(7))
+    : await hosted.execute({ token: authorization?.slice(7), operation: req.params.operation, args: req.body?.args });
   res.json({ result });
 });
 

@@ -17,6 +17,7 @@ const user = computed(() => {
 })
 const menuOpen = ref(false)
 const resetting = ref(false)
+const databaseDemo = computed(() => session.demoEnabled === true)
 const scrolled = ref(false)
 const onScroll = () => { scrolled.value = window.scrollY > 4 }
 const menuEl = ref(null)
@@ -64,7 +65,9 @@ function doSignOut() {
 }
 async function doReset() {
   if (resetting.value) return
-  if (!(await confirmDialog({ title: 'Reset demo data?', message: 'Everything in this browser goes back to the starting sample, including your plans.', confirmLabel: 'Reset demo', danger: true }))) return
+  if (!(await confirmDialog({ title: 'Reset demo data?', message: databaseDemo.value
+    ? 'This rebuilds the shared demo for everyone using it. Demo plans, availability, votes and listings will be restored, starting two weeks from today in Singapore time. Your demo logins stay the same.'
+    : 'Everything in this browser goes back to the starting sample, including your plans.', confirmLabel: 'Reset demo', danger: true }))) return
   resetting.value = true
   try {
     const result = await resetDemo()
@@ -101,6 +104,7 @@ function isActive(key) {
       </nav>
 
       <div class="right">
+        <button v-if="user && databaseDemo" type="button" class="btn btn-secondary btn-sm" :disabled="resetting" @click="doReset">{{ resetting ? 'Resetting…' : 'Reset demo data' }}</button>
         <button v-if="user" type="button" class="btn btn-ghost btn-sm tour-trigger" aria-label="Quick tour" title="Quick tour" @click="startTour"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.7" /><path d="M9.5 9a2.5 2.5 0 1 1 4 2c-1 .6-1.5 1.2-1.5 2.5M12 17h.01" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" /></svg><span class="d-none d-lg-inline">Quick tour</span></button>
         <RouterLink v-if="user" to="/new" data-tour="nav-create" class="btn btn-primary btn-sm d-none d-md-inline-flex">Create a jio</RouterLink>
         <button type="button" class="btn btn-ghost btn-sm icon-btn" :aria-label="themeLabel" :title="themeLabel" @click="cycleTheme">
@@ -116,7 +120,7 @@ function isActive(key) {
           <nav v-if="menuOpen" id="account-links" class="menu card-x pop" aria-label="Account">
             <div class="menu-head">
               <strong>{{ user.name }}</strong>
-              <span class="small muted">{{ isDemo ? 'Demo account' : 'Your account' }}</span>
+              <span class="small muted">{{ isDemo || databaseDemo ? 'Demo account' : 'Your account' }}</span>
             </div>
             <RouterLink to="/profile" class="menu-item">Profile and interests</RouterLink>
             <button v-if="isDemo" type="button" class="menu-item" @click="switchPerson">Switch person</button>

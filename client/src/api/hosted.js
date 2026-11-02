@@ -13,6 +13,7 @@ async function getClient() {
       if (!response.ok) throw new Error('config unavailable')
       const runtime = await response.json()
       if (!runtime.supabaseUrl || !runtime.supabaseAnonKey) throw new Error('config incomplete')
+      api.session.demoEnabled = runtime.demoEnabled === true
       const url = new URL(runtime.supabaseUrl, window.location.origin).href
       client = createClient(url, runtime.supabaseAnonKey)
       return client
@@ -42,6 +43,15 @@ async function request(operation, args, token) {
   return body.result
 }
 const api = createHostedAdapter({ auth, request, reactive, onRevision: () => { revision.value++ } })
+api.resetDemo = async () => {
+  if (!api.session.demoEnabled) throw new ApiError('forbidden', 'Demo reset is unavailable on this installation.')
+  const { data, error } = await auth.getSession()
+  if (error || !data.session?.access_token) throw new ApiError('auth', 'Sign in to a demo account first.')
+  const result = await request('resetDemo', [], data.session.access_token)
+  await api.updateProfile({})
+  revision.value++
+  return result
+}
 api.providerToken = async () => {
   const { data, error } = await auth.getSession()
   if (error) throw new ApiError('auth', 'Please sign in again.')
