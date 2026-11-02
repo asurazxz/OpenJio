@@ -1,6 +1,6 @@
 # OpenJio decisions
 
-Recorded: **30 October 2026**, Singapore time. Working branch: **`revamp/ideate`**.
+Recorded: **30 October 2026**, Singapore time. Current working branch: **`main`** (confirmed 2 November 2026).
 
 This file consolidates the decisions from our project discussion and the existing team plan. The latest decisions below take precedence over earlier proposals. A decision to build something does not mean its live integration has been verified.
 
@@ -12,7 +12,9 @@ The original [ideation plan](IDEATION-PLAN.md), [design specification](DESIGN.md
 
 ### D01. Keep OpenJio a standalone revamp
 
-**Agreed.** The product is called **OpenJio**, and the revamp is developed on `revamp/ideate`. It must not depend on another branch's application code, data, or hosted services. The checkout was brought to the requested `e009419` baseline before the subsequent improvements.
+**Agreed.** The product is called **OpenJio**, and the revamp was originally developed on `revamp/ideate`. It must not depend on another branch's application code, data, or hosted services. The checkout was brought to the requested `e009419` baseline before the subsequent improvements.
+
+**Amended 2 November 2026 (agreed explicitly):** the current working branch is `main`. Continue development and any explicitly requested commits on `main`; earlier feature-branch references are historical.
 
 OpenJio helps Singapore friend groups turn acceptable free time into an outing they can agree on. Solo planning uses the same planner with one person's preferences. An open jio is a public hangout people can discover and join.
 
@@ -261,6 +263,7 @@ Use the existing geographic sample data and clearly label the example. The drawn
 
 | Earlier approach | Current decision |
 | --- | --- |
+| Develop on `revamp/ideate` | Continue on `main` (confirmed 2 November 2026). |
 | Phone-first priority in the original design notes | Desktop-first, with full mobile support. |
 | Map with a persistent right-hand card sidebar | Full-width map; cards are a separate view. |
 | Map/Cards buttons with explanatory subtitles | Plain Map and Cards labels. |
@@ -274,7 +277,7 @@ Use the existing geographic sample data and clearly label the example. The drawn
 
 ## 9. Working and verification decisions
 
-Keep current changes reviewable on the feature branch. The earlier instruction to discard local changes applied to that synchronisation step; it is not continuing permission to discard subsequent implementation work. No new commit, push, merge, production deployment, or paid resource purchase was requested for these improvements.
+Keep current changes reviewable on `main` (see the amendment to D01). The earlier instruction to discard local changes applied to that synchronisation step; it is not continuing permission to discard subsequent implementation work. No new commit, push, merge, production deployment, or paid resource purchase was requested for these improvements.
 
 Use meaningful regression tests for functional changes, Node tests for pure logic, Playwright for user journeys, a production build, and focused review/visual checks. Test claims describe the state actually checked; fixture tests are not live-provider verification.
 

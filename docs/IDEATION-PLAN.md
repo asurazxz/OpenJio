@@ -13,6 +13,7 @@
 
 | Date | Change | Who |
 |---|---|---|
+| 2 Nov 2026 | Current working branch confirmed as `main`; updated the implementation tracker (D01 amendment) | User |
 | 2 Nov 2026 | Live Discover data (OpenStreetMap places, scheduled Telegram ingestion with auto-publishing) and planning/hangout UX refinements; see decisions D30–D39 | Huxley |
 | 30 Oct 2026 | Google Calendar import excluded from submission (decided); retain the When2meet-style manual availability grid | Huxley |
 | 26 Oct 2026 | Initial ideation doc on branch `revamp/ideate` | Huxley |
@@ -389,14 +390,14 @@ Detailed status, verification and known issues are in [STATUS.md](./STATUS.md).
 
 | Item | Owner | Branch | Status | Notes |
 |---|---|---|---|---|
-| Foundation (scaffold, Supabase, auth, migration, seed) | Open | revamp/ideate | Demo mode built; hosted adapter written | Supabase project not connected; four migrations in `supabase/migrations/` |
-| R1 Discover | Open | revamp/ideate | Built, live data | OpenStreetMap places, auto-extracted posts, capped map with clustering |
-| R2 Hangouts, voting, open jios | Open | revamp/ideate | Built | Invite links, versioned votes, confirm, open jios |
-| R3 Availability | Open | revamp/ideate | Built | Grid and ranked slots; Google Calendar import removed (D14) |
-| R4 Itinerary builder | Open | revamp/ideate | Built | Beam search, greedy baseline, swaps, manual build, drag reorder; live-routing retry still to do |
-| R5 Companion + routing module | Open | revamp/ideate | Built | Late join, NEA weather, OneMap server (needs credentials) |
-| R6 Content pipeline | Open | revamp/ideate | Built, scheduled | Runs every 2 h, auto-publishes non-ended posts; labelled set still empty |
-| UI system / consistency | Open | revamp/ideate | Built | Hawker Glow tokens, shared confirmation dialog, landing page; see DESIGN.md §13 |
+| Foundation (scaffold, Supabase, auth, migration, seed) | Open | main | Demo mode built; hosted adapter written | Supabase project not connected; four migrations in `supabase/migrations/` |
+| R1 Discover | Open | main | Built, live data | OpenStreetMap places, auto-extracted posts, capped map with clustering |
+| R2 Hangouts, voting, open jios | Open | main | Built | Invite links, versioned votes, confirm, open jios |
+| R3 Availability | Open | main | Built | Grid and ranked slots; Google Calendar import removed (D14) |
+| R4 Itinerary builder | Open | main | Built | Beam search, greedy baseline, swaps, manual build, drag reorder; live-routing retry still to do |
+| R5 Companion + routing module | Open | main | Built | Late join, NEA weather, OneMap server (needs credentials) |
+| R6 Content pipeline | Open | main | Built, scheduled | Runs every 2 h, auto-publishes non-ended posts; labelled set still empty |
+| UI system / consistency | Open | main | Built | Hawker Glow tokens, shared confirmation dialog, landing page; see DESIGN.md §13 |
 
 ---
 

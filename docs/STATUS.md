@@ -1,6 +1,6 @@
 # Project status
 
-Last updated: 2 Nov 2026. Branch: `revamp/ideate` (pushed to origin). Latest feature commit: `624d46f`.
+Last updated: 2 Nov 2026. Current working branch: `main` (confirmed by the user). Latest feature commit: `624d46f`.
 
 This is the single place to check where OpenJio stands: what works, how it was checked, what is missing, and what to do next. Agreed decisions live in [decisions.md](./decisions.md) (they take precedence over older documents); original scope in [IDEATION-PLAN.md](./IDEATION-PLAN.md); visual design in [DESIGN.md](./DESIGN.md); algorithm results in [EVALUATION.md](./EVALUATION.md); credentials in [SETUP-CREDENTIALS.md](./SETUP-CREDENTIALS.md).
 
