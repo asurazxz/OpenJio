@@ -1,7 +1,7 @@
 <script setup>
 import { ref, computed, watch, onBeforeUnmount } from 'vue'
 import { getPlan, getHangout } from '../../api/index.js'
-import { revision } from '../../api/store.js'
+import { revision } from '../../api/revision.js'
 import { forecastNear } from '../../lib/weather.js'
 import { sgParts, sgDateKey, fromDateKey, fmtTime, fmtRange, DAY } from '../../lib/time.js'
 import UserAvatar from '../UserAvatar.vue'

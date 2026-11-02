@@ -1,0 +1,16 @@
+.git
+.env
+.env.*
+**/node_modules
+**/.venv
+**/__pycache__
+**/dist
+**/test-results
+**/playwright-report
+server/.cache
+pipeline/out
+.playwright-cli
+**/*.session
+**/*.session-journal
+.codex
+.agents

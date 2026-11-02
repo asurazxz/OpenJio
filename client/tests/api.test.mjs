@@ -10,7 +10,7 @@ function memoryStorage() {
 }
 globalThis.localStorage = memoryStorage()
 globalThis.sessionStorage = memoryStorage()
-const api = await import('../src/api/index.js')
+const { default: api } = await import('../src/api/demo.js')
 const { load } = await import('../src/api/store.js')
 const sat = (h, m = 0) => sgTime(2026, 11, 14, h, m)
 let h
@@ -133,7 +133,7 @@ test('live refinement requests the second route at the refined first stop depart
   const originalFetch = globalThis.fetch
   const requests = []
   globalThis.fetch = async (url) => {
-    if (String(url).includes('/route?')) requests.push(new URL(url))
+    if (String(url).includes('/route?')) requests.push(new URL(url, 'http://localhost'))
     return { ok: true, json: async () => ({ durationMins: 20, onemap: 'ok' }) }
   }
   try {
@@ -161,7 +161,7 @@ test('a finalized live-routed plan keeps its accepted schedule after a fresh bro
       const storage=new Map([['openjio:demo:v1',JSON.stringify(fixture.state)],['openjio:session','u-mei']]);
       globalThis.localStorage={getItem:k=>storage.get(k)||null,setItem:(k,v)=>storage.set(k,v),removeItem:k=>storage.delete(k)};
       globalThis.sessionStorage=globalThis.localStorage;
-      const api=await import(${JSON.stringify(new URL('../src/api/index.js', import.meta.url).href)});
+      const {default:api}=await import(${JSON.stringify(new URL('../src/api/demo.js', import.meta.url).href)});
       const plan=await api.getPlan(fixture.id);
       console.log(JSON.stringify({stage:(await api.getHangout(fixture.id)).hangout.stage,finalizedAt:plan.finalizedAt,stops:plan.stops.map(s=>({start:s.start,end:s.end,travelMins:s.travelMins,travelEstimate:s.travelEstimate}))}));
     `], { input: JSON.stringify({ id: custom.id, state: load() }), encoding: 'utf8', timeout: 10000 })
@@ -192,7 +192,7 @@ test('finalizing a manual plan captures live durations adopted after its initial
       const storage=new Map([['openjio:demo:v1',JSON.stringify(fixture.state)],['openjio:session','u-mei']]);
       globalThis.localStorage={getItem:k=>storage.get(k)||null,setItem:(k,v)=>storage.set(k,v),removeItem:k=>storage.delete(k)};
       globalThis.sessionStorage=globalThis.localStorage;
-      const api=await import(${JSON.stringify(new URL('../src/api/index.js', import.meta.url).href)});
+      const {default:api}=await import(${JSON.stringify(new URL('../src/api/demo.js', import.meta.url).href)});
       const plan=await api.getPlan(fixture.id);
       console.log(JSON.stringify({stage:(await api.getHangout(fixture.id)).hangout.stage,start:plan.stops[0].start,finalizedAt:plan.finalizedAt}));
     `], { input: JSON.stringify({ id: custom.id, state: load() }), encoding: 'utf8', timeout: 10000 })

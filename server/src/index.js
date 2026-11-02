@@ -2,6 +2,7 @@ import express from 'express';
 import { createSupabaseRepository } from './supabase.js';
 import { createHostedService } from './hosted.js';
 import { createPlanningTravel } from './planning-travel.js';
+import { createLiveCatalogueSync } from './live-sync.js';
 import { readFile } from 'node:fs/promises';
 import { timingSafeEqual } from 'node:crypto';
 import path from 'node:path';
@@ -45,6 +46,7 @@ const hosted = createHostedService({
   readDrafts,
   travel: createPlanningTravel,
   fetchPlaces: async () => placesCatalogue.list(),
+  syncCatalogue: sharedMode ? createLiveCatalogueSync({ repository, fetchPlaces: async () => placesCatalogue.list(), readDrafts }) : null,
 });
 const PORT = Number(process.env.PORT) || 8787;
 const places = createPlaceSearch();
@@ -136,6 +138,9 @@ app.use((req, res, next) => {
 });
 
 app.use(express.json({ limit: '256kb' }));
+
+// Container readiness must not spend a provider call or wait on OneMap login.
+app.get('/api/ready', (req, res) => res.json({ ok: true, mode: sharedMode ? 'supabase' : 'demo' }));
 
 app.post('/api/app/:operation', async (req, res) => {
   const authorization = req.get('Authorization');

@@ -47,7 +47,7 @@ const nextUp = computed(() => {
 })
 const comingUp = computed(() => groups.value.upcoming.filter((h) => h.id !== nextUp.value?.id))
 
-const mineThisWeek = computed(() => (hangouts.value || []).filter((h) => h.lockedSlot && !isPast(h)))
+const datedHangouts = computed(() => (hangouts.value || []).filter((h) => h.lockedSlot && h.stage !== 'cancelled'))
 // Home keeps curated listings and auto-extracted ones with nothing missing; the rest stay in Discover.
 const weekListings = computed(() => {
   const mine = new Set((hangouts.value || []).map((h) => h.id))
@@ -163,7 +163,7 @@ const greeting = computed(() => {
         </section>
       </div>
 
-      <WeekStrip :listings="weekListings" :hangouts="mineThisWeek" />
+      <WeekStrip :listings="weekListings" :hangouts="datedHangouts" />
 
       <section v-if="crews.length" class="crew" aria-labelledby="g-crew">
         <h2 id="g-crew" class="sec-title">Plan with your usual crew again</h2>

@@ -25,6 +25,9 @@ export function createSupabaseRepository({ url, key, fetchImpl = fetch }) {
   }
   return {
     configured,
+    syncListings(listings) {
+      return send('/rest/v1/rpc/openjio_sync_live_listings', { p_listings: listings });
+    },
     async verifyToken(token) {
       // Auth verifies the actual token; decoding JWT claims is not authentication.
       try { const user = await send('/auth/v1/user', undefined, token); return user?.id ? { id: user.id } : null; }

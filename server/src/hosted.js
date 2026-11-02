@@ -14,13 +14,14 @@ const OPERATIONS = new Set([
 ]);
 export function domainError(code, message) { return Object.assign(new Error(message), { code }); }
 
-export function createHostedService({ repository, verifyToken, readDrafts, catalogue, travel, fetchPlaces }) {
+export function createHostedService({ repository, verifyToken, readDrafts, catalogue, travel, fetchPlaces, syncCatalogue }) {
   return {
     async execute({ token, operation, args = [] }) {
       if (!OPERATIONS.has(operation)) throw domainError('invalid', 'Unknown app operation.');
       if (!Array.isArray(args) || args.length > 4) throw domainError('invalid', 'Invalid operation arguments.');
       const identity = token ? await verifyToken(token) : null;
       if ((token && !identity) || (!identity && !PUBLIC.has(operation))) throw domainError('auth', 'Please sign in first.');
+      await syncCatalogue?.();
       // A conflict rehydrates and reruns the permission checks and computation. This
       // makes final-seat joins safe without retaining a transaction during routing.
       for (let attempt = 0; attempt < 3; attempt++) {

@@ -1,6 +1,6 @@
-// Load data and reload it whenever the demo store changes (this tab or another).
+// Load data and reload it whenever accepted app data changes.
 import { ref, watch, onMounted, onBeforeUnmount } from 'vue'
-import { revision } from '../api/store.js'
+import { revision } from '../api/revision.js'
 
 export function useLive(loader, { immediate = true } = {}) {
   const data = ref(null)

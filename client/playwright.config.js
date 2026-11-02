@@ -6,12 +6,13 @@ export default defineConfig({
   workers: 1,
   timeout: 30_000,
   use: {
-    baseURL: 'http://localhost:5173',
+    baseURL: 'http://127.0.0.1:5176',
   },
   webServer: {
-    command: 'pnpm dev',
-    url: 'http://localhost:5173',
-    reuseExistingServer: true,
+    command: 'pnpm exec vite --host 127.0.0.1 --port 5176 --strictPort',
+    env: { VITE_DATA_MODE: 'demo' },
+    url: 'http://127.0.0.1:5176',
+    reuseExistingServer: false,
   },
   projects: [
     {

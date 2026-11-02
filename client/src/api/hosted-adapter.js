@@ -7,7 +7,7 @@ const OPERATIONS = ['listUsers','updateProfile','listListings','getListing','lis
 
 export function createHostedAdapter({ auth, request, reactive = v => v, onRevision = () => {} }) {
   const session = reactive({ userId: null, error: null })
-  let profile = null, epoch = 0, locallySignedOut = false, initialized
+  let profile = null, epoch = 0, locallySignedOut = false, initialized, subscribed = false
   const fail = error => new ApiError(error.code || 'auth', error.message || 'Authentication failed.')
   const clear = () => { profile = null; session.userId = null; onRevision() }
   async function hydrate(authSession) {
@@ -25,6 +25,15 @@ export function createHostedAdapter({ auth, request, reactive = v => v, onRevisi
     try { return await request(operation, args, locallySignedOut ? null : data.session?.access_token) }
     catch (error) { if (error.code === 'auth') clear(); throw error }
   }
+  function subscribe() {
+    if (subscribed) return
+    auth.onAuthStateChange((event, next) => {
+      // No awaited SDK work inside its callback/lock.
+      if (event === 'SIGNED_OUT') { epoch++; clear(); return }
+      if (!locallySignedOut) queueMicrotask(() => hydrate(next).catch(error => { clear(); session.error = error.message }))
+    })
+    subscribed = true
+  }
   const api = {
     AREAS, INTERESTS, SOFT_ISSUES: ['no_meal', 'unknown_hours'], ApiError, session,
     currentUser: () => profile,
@@ -32,13 +41,9 @@ export function createHostedAdapter({ auth, request, reactive = v => v, onRevisi
       if (!initialized) initialized = (async () => {
         const { data, error } = await auth.getSession()
         if (error) throw fail(error)
+        subscribe()
         await hydrate(data.session)
-        auth.onAuthStateChange((event, next) => {
-          // No awaited SDK work inside its callback/lock.
-          if (event === 'SIGNED_OUT') { epoch++; clear(); return }
-          if (!locallySignedOut) queueMicrotask(() => hydrate(next).catch(error => { clear(); session.error = error.message }))
-        })
-      })()
+      })().catch(error => { initialized = undefined; throw error })
       return initialized
     },
     async signIn(credentials) {
@@ -46,12 +51,14 @@ export function createHostedAdapter({ auth, request, reactive = v => v, onRevisi
       const { data, error } = await auth.signInWithPassword({ email: credentials.email.trim(), password: credentials.password })
       if (error) throw fail(error)
       locallySignedOut = false
+      subscribe()
       return hydrate(data.session)
     },
     async signUp(credentials) {
       if (!credentials?.email || !credentials?.password || !credentials?.name?.trim()) throw new ApiError('invalid', 'Enter your name, email and password.')
       const { data, error } = await auth.signUp({ email: credentials.email.trim(), password: credentials.password, options: { data: { display_name: credentials.name.trim().slice(0,40) } } })
       if (error) throw fail(error)
+      subscribe()
       if (!data.session) return { confirmationRequired: true }
       locallySignedOut = false
       await hydrate(data.session)
@@ -66,7 +73,7 @@ export function createHostedAdapter({ auth, request, reactive = v => v, onRevisi
   for (const operation of OPERATIONS) api[operation] = async (...args) => {
     const result = await call(operation, args)
     if (operation === 'updateProfile') { profile = result; session.userId = result.id }
-    if (!['getListing','listListings','getSlots','previewSlot','previewCustomStop','previewStops','getAlternatives','listUsers','previewHangout','listMyHangouts','getHangout'].includes(operation)) onRevision()
+    if (!['getPlan','getListing','listListings','getSlots','previewSlot','previewCustomStop','previewStops','getAlternatives','listUsers','previewHangout','listMyHangouts','getHangout'].includes(operation)) onRevision()
     return result
   }
   return api

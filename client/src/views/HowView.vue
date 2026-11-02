@@ -81,7 +81,7 @@ const better = (a, b, higher = true) => a != null && b != null && (higher ? a > 
 
     <section class="mt-4" aria-labelledby="eval-h">
       <h2 id="eval-h">Does it beat the simple approach?</h2>
-      <p class="muted">Live results from this browser, using the sample listings. The baseline repeatedly picks the most interesting stop that fits next. Both methods must satisfy the same timing and meal rules. Bold marks the better value. Cases where the baseline wins are left in.</p>
+      <p class="muted">Synthetic examples calculated in this browser using isolated sample fixtures, not your database. The baseline repeatedly picks the most interesting stop that fits next. Both methods must satisfy the same timing and meal rules. Bold marks the better value. Cases where the baseline wins are left in.</p>
 
       <div class="table-wrap card-x p-0">
         <table class="table-x">

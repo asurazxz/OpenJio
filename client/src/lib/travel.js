@@ -5,7 +5,7 @@
 import { estimateTravel } from './geo.js'
 import { sgParts } from './time.js'
 
-const API = import.meta.env?.VITE_API_BASE || 'http://localhost:8787'
+const API = import.meta.env?.VITE_DATA_MODE === 'demo' ? (import.meta.env?.VITE_API_BASE || '/backend') : '/backend'
 const live = new Map()
 let serverStatus = null
 

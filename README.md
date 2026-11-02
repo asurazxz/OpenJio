@@ -1,76 +1,93 @@
-# OpenJio
+# OpenJio — live installation
 
-Plans that work for the whole group. OpenJio finds when a Singapore friend group is free, then builds an outing that fits the time: places, events and deals that are actually open, with travel between them accounted for. Members vote on each stop, the host confirms, and anyone running late can find which stop to join.
+Plan a Singapore outing together: find a common time, build a feasible route, vote on stops, and help late joiners meet the group. The current UI targets **desktop**.
 
-Where the project stands right now: [docs/STATUS.md](docs/STATUS.md). Scope and decisions: [docs/IDEATION-PLAN.md](docs/IDEATION-PLAN.md).
+This is the **`main` branch**: real accounts and live provider data, with no seeded users, outings or sample listings. OpenJio is an independent personal project; keep service and hosting costs at **$0** using existing hardware.
 
-## Run it
+## Choose the right installation
 
-Needs Node 22 or later and pnpm. Run the client and the API server in two terminals:
+| Branch | Data and accounts | Fresh-install URL | Setup |
+|---|---|---|---|
+| `main` | Accounts you create; real provider listings; initially empty | `http://localhost:8080` | Commands below |
+| `demo` | Six real demo accounts, five outings, 70 labelled sample listings, relative-date reset | `http://127.0.0.1:8082` | [Demo branch guide](https://github.com/asurazxz/OpenJio/blob/demo/docs/DEMO.md) |
+
+Changing Git branches does **not** switch, copy or reset a database. Containers continue serving their built images until rebuilt. Use separate clones if running both installations; one stack is enough for routine use.
+
+## Host live data from a fresh clone
+
+Requirements: Git and Docker Engine/Desktop with **Compose 2.24+**. Start Docker and ensure your user can run `docker compose`. First build requires internet. Host Node, Python, pnpm and a managed Supabase project are unnecessary for this Docker setup.
 
 ```bash
-pnpm --dir client install
+git clone --branch main https://github.com/asurazxz/OpenJio.git OpenJio-live
+cd OpenJio-live
+cp .env.example .env
+docker compose run --rm setup
+docker compose --env-file .env.docker up --build -d --wait
+```
+
+On PowerShell use `Copy-Item .env.example .env`. Copy the example only on first setup. The setup tool generates private `.env.docker` credentials once and preserves them on reruns. Keep that file with the database volumes; never commit it.
+
+Open **http://localhost:8080** and create your own account. There are **no default live login credentials**. Separate browser profiles/devices can sign in independently and share an outing via its invite link. Local signup auto-confirms email.
+
+**Discover starts empty.** To populate it, add your own Geoapify/OneMap configuration to `.env`, recreate the API, and ingest current posts:
+
+```bash
+docker compose --env-file .env.docker up -d api
+docker compose --env-file .env.docker exec api node /app/scripts/run-ingest.mjs
+```
+
+Venue refresh and post extraction are asynchronous; inspect `/api/places/catalogue/status`, `/api/ingest/status` and API logs before refreshing Discover. Gemini/Telegram login are optional. See [provider setup and live data](docs/DEVELOPMENT.md#live-data-empty-first-then-provider-input) for exact requirements, imports and scheduled ingestion. Missing provider data never falls back to fabricated listings.
+
+A fresh checkout reproduces the **hosting**, not this machine's private accounts or changing catalogue snapshot. For an exact authorized data transfer, use [backup and restore](docs/OPERATIONS.md#backup-and-restore).
+
+## Operate the installation
+
+```bash
+docker compose --env-file .env.docker ps
+docker compose --env-file .env.docker logs --tail=100 api migrate
+docker compose --env-file .env.docker stop
+docker compose --env-file .env.docker up -d --wait
+```
+
+These commands retain data. `down` also retains named volumes; **`down -v` permanently deletes them**. The stack needs six running services: web, API, internal Supabase gateway, REST, Auth and PostgreSQL. Setup/migrations are one-shot jobs. [Container roles, backups and upgrades](docs/OPERATIONS.md).
+
+For LAN hosting, change `APP_BIND`, `APP_PORT` and matching `APP_URL` together in `.env.docker`, preserving its secrets, then recreate the stack. [Detailed LAN instructions](docs/DEVELOPMENT.md#lan-hosting-and-current-server). This local recipe does not configure public HTTPS or email recovery.
+
+This server uses **http://192.168.1.100:8081** for live OpenJio because Nextcloud occupies LAN port 8080. The live stack was stopped at the user's request on 3 November 2026, retaining volumes. Its independent demo runs on **8082**. These machine-specific addresses are not fresh-install defaults.
+
+## Develop and verify
+
+For hot reload, install Node **22.12+** and pnpm **12.16.1** while Docker is running:
+
+```bash
+pnpm --dir client install --frozen-lockfile
+pnpm --dir server install --frozen-lockfile
 pnpm --dir client dev
 ```
 
+Open Vite's printed URL, normally http://localhost:5173. Set root `.env`'s `OPENJIO_DOCKER_URL` if Docker uses another address/port, then restart Vite. Vite forwards config/Auth/API requests; no second host API process is needed.
+
 ```bash
-pnpm --dir server install
-pnpm --dir server dev
+pnpm --dir client test
+pnpm --dir server test
+node --test scripts/tests/*.test.mjs
+pnpm --dir client build
 ```
 
-Open http://localhost:5173. Signed out, you see the public landing page, Discover and How it works. Choose **Sign in** and pick a demo person; a second browser tab can sign in as someone else, and both tabs share the same demo data.
+[Verification details](docs/DEVELOPMENT.md#verification) cover browser/SQL checks, dependency installation, historical fixture tests and disposable shared-account tests. Tests that create accounts/outings require explicit write opt-in and a separate test database. `VITE_DATA_MODE=demo` is an older browser-local fixture mode, not the seeded database deployment on branch `demo`.
 
-The API server is what makes the data live: OneMap address lookup and transit routing, "Find a place" search, the OpenStreetMap places catalogue, and the scheduled Telegram ingestion. Without it, or without credentials, the app still runs on sample listings and estimated travel times. Add keys to a root `.env` (copy `.env.example`); see [docs/SETUP-CREDENTIALS.md](docs/SETUP-CREDENTIALS.md).
+## Documentation
 
-## What to try
-
-1. As **Mei**, open "Saturday catch-up". The Time tab shows who has replied (Jun has not, so he counts as unknown, not free). Lock the best time, or use **Adjust time** to pick another and see attendance update.
-2. On the Plan tab, **Generate plan**, drag a stop card to reorder it, swap a stop (the sheet previews new timings), or **Add a stop** from Discover, a place search, or a typed address. Then **Close voting and confirm**.
-3. In another tab as **Farah**, vote Keep or Swap on the stops; votes appear in Mei's tab without a refresh.
-4. On **On the day**, enter where you are leaving from and when to get the first stop you can still reach.
-5. In **Discover**, browse the map or cards: live OpenStreetMap places, auto-extracted Telegram deals and events (with a link to the original post), sample listings and Open Jios. Join "Sunday Chinatown wander" from **Open Jios**.
-6. **How it works** shows the planning rules and a live comparison against simpler methods.
-
-"Reset demo data" in the account menu restores the starting sample.
-
-## Project layout
-
-| Path | What it is |
+| Guide | Contents |
 |---|---|
-| `client/` | Vue 3 + Vite + Bootstrap 5 app. Leaflet maps on OneMap tiles. |
-| `client/src/lib/algo/` | Slot ranking, itinerary generation, deal validity, late-join reachability, Discover ranking, evaluation. Pure functions, unit tested. |
-| `client/src/api/` | Data API. `engine.js` holds all domain rules and permissions; demo mode runs it in the browser with localStorage, hosted mode runs the same engine in the server against Supabase. |
-| `server/` | Express 5 server: OneMap search and routing with a route cache, Geoapify place search, the OpenStreetMap places catalogue, scheduled pipeline runs with auto-publishing, and the trusted engine for hosted (Supabase) mode. |
-| `pipeline/` | Python ingestion: public Telegram channel previews (Telethon for others), confirmgood.com; regex pre-parse and Gemini extraction into drafts. |
-| `supabase/migrations/` | Postgres schema with row level security for the hosted version. |
-| `docs/` | [STATUS.md](docs/STATUS.md) (current status), [decisions.md](docs/decisions.md) (agreed decisions, newest first in authority), [IDEATION-PLAN.md](docs/IDEATION-PLAN.md) (original scope), [DESIGN.md](docs/DESIGN.md) (Hawker Glow design spec and what was built), [SETUP-CREDENTIALS.md](docs/SETUP-CREDENTIALS.md), [EVALUATION.md](docs/EVALUATION.md). |
+| [Development](docs/DEVELOPMENT.md) | Fresh live setup, provider credentials, ingestion/imports, LAN, hot reload and tests |
+| [Operations](docs/OPERATIONS.md) | Ports, containers, persistence, backups, restore and upgrades |
+| [Architecture](docs/ARCHITECTURE.md) | Auth/API/database boundaries, permissions, algorithms and design |
+| [Project](docs/PROJECT.md) | Product behavior, $0 policy, limitations and roadmap |
+| [Hosting verification](docs/HOSTING-VERIFICATION.md) | Dated fresh-install, browser and backup/restore checks |
+| [Evaluation](docs/EVALUATION.md) | Synthetic algorithm comparisons; not a live-provider benchmark |
+| [Demo branch](https://github.com/asurazxz/OpenJio/blob/demo/README.md) | Separate seeded installation, six accounts and a reset two weeks ahead |
 
-## Tests
+## Sources and credits
 
-```bash
-pnpm --dir client test        # unit tests: algorithms, domain engine and publication rules
-pnpm --dir client e2e         # Playwright journeys (desktop and 375px mobile)
-pnpm --dir client evaluate    # regenerate docs/EVALUATION.md
-pnpm --dir server test        # server: inputs, caches, places catalogue, ingestion, hosted service
-```
-
-## Content pipeline
-
-The pipeline reads recent public posts from Singapore Telegram channels and confirmgood.com, extracts deals and events with Gemini, and writes drafts to `pipeline/out/drafts.json` (local to each machine, not in git). Set it up once:
-
-```bash
-python -m venv pipeline/.venv
-pipeline/.venv/bin/pip install -r pipeline/requirements.txt
-```
-
-(`pipeline/.venv/Scripts/pip` on Windows.) With `INGEST_ENABLED=true` in `.env`, the API server runs it every 2 hours; `POST /api/ingest/run` starts a run and `/api/ingest/status` shows progress. Every extracted deal or event that has not ended is published to Discover automatically, with missing dates, times or location shown as such and a link to the original post. These listings are view-only and there is no manual review step. `pipeline/evaluate.py` measures extraction accuracy against a hand-labelled set in `pipeline/labels/` (still to be labelled).
-
-## Data sources and credits
-
-- **OneMap**, Singapore Land Authority: map tiles, address search and public transport routing.
-- **Geoapify Free**, using **OpenStreetMap** data (© OpenStreetMap contributors): the Discover places catalogue (refreshed weekly) and place search for host-added stops. Results are cached; provider calls are capped at 1,000 per UTC day for one server process/data directory.
-- **NEA weather forecasts** via data.gov.sg (2-hour, 24-hour and 4-day outlook, chosen by the outing's start time).
-- Public posts from the Telegram channels @sgfooddeals, @sgweekend, @sgconcerts, @dateideas and @sgstudentpromos, and articles from confirmgood.com. Listings link back to their source.
-- **Sample data**: the places are real public venues with approximate hours; events and deals in the sample are made up and labelled as sample data in the app.
-
-Libraries: Vue, Vue Router, Vite, Bootstrap, Leaflet, Leaflet.markercluster, Express, Playwright, Requests, Beautiful Soup, Telethon. Fonts: Nunito and DM Sans from Google Fonts.
+Built with Vue, Vite, Bootstrap, Leaflet, Express, Supabase/PostgreSQL and Python. Fonts: Nunito and DM Sans. OneMap/Singapore Land Authority supplies maps/address lookup/routes, Geoapify supplies OpenStreetMap places, and NEA/data.gov.sg supplies weather. Deals/events retain public Telegram/confirmgood source links. Preserve provider attribution. Landing illustrations and synthetic algorithm fixtures are labelled examples, separate from the live catalogue.

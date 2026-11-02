@@ -1,7 +1,8 @@
 // Demo-mode persistence. Shared data lives in localStorage so several tabs act as
 // separate people on the same "backend"; who is signed in lives in sessionStorage per tab.
 
-import { ref } from 'vue'
+import { revision } from './revision.js'
+export { revision } from './revision.js'
 import { PERSONAS } from '../data/personas.js'
 import { AREAS, LISTINGS } from '../data/seed-listings.js'
 import { sgTime, toIso, HOUR } from '../lib/time.js'
@@ -11,7 +12,7 @@ const KEY = 'openjio:demo:v1'
 const SESSION_KEY = 'openjio:session'
 
 /** Bumped on every change (this tab or another) so views can reload. */
-export const revision = ref(0)
+// The same signal is used by the shared runtime and explicit demo tests.
 
 let state = null
 

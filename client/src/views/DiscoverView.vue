@@ -469,7 +469,7 @@ async function confirmAdd() {
       </div>
     </div>
 
-    <p class="small muted mt-4">Sources: OpenJio sample data (curated for this demo). Deals and events come from public posts on the Singapore Telegram channels @sgfooddeals, @sgweekend, @sgconcerts, @dateideas and @sgstudentpromos, and from confirmgood.com. They are read automatically, and each card links to its post. Map tiles from OneMap, Singapore Land Authority.</p>
+    <p class="small muted mt-4">Sources: OpenStreetMap places via Geoapify. Deals and events come from public posts on the Singapore Telegram channels @sgfooddeals, @sgweekend, @sgconcerts, @dateideas and @sgstudentpromos, and from confirmgood.com. They are read automatically, and each card links to its post. Map tiles from OneMap, Singapore Land Authority.</p>
 
     <AppDialog :open="!!detail" :title="detail?.title || ''" wide @close="detail = null">
       <ListingDetails v-if="detail" :listing="detail" @add="onAdd(detail); detail = null" />

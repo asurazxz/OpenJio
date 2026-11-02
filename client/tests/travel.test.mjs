@@ -10,7 +10,7 @@ test('live durations use the actual leg departure even within the same hour', as
   const late = sgTime(2026, 11, 14, 14, 50)
   const originalFetch = globalThis.fetch
   globalThis.fetch = async (url) => {
-    const q = new URL(url)
+    const q = new URL(url, 'http://localhost')
     return { ok: true, json: async () => q.pathname.endsWith('/health') ? { onemap: 'ok' } : { durationMins: Date.parse(q.searchParams.get('depart')) === early ? 10 : 30 } }
   }
   try {

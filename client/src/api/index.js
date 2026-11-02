@@ -1,5 +1,5 @@
 // Explicit runtime selection: shared mode never falls back to demo persistence.
-export const DATA_MODE = import.meta.env?.VITE_DATA_MODE || 'demo'
+export const DATA_MODE = import.meta.env?.VITE_DATA_MODE || 'supabase'
 if (!['demo','supabase'].includes(DATA_MODE)) throw new Error('Unknown VITE_DATA_MODE. Choose demo or supabase.')
 export const isDemo = DATA_MODE === 'demo'
 const api = isDemo ? (await import('./demo.js')).default : (await import('./hosted.js')).default

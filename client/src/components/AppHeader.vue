@@ -2,11 +2,11 @@
 import { computed, ref, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { session, currentUser, signOut, resetDemo, isDemo } from '../api/index.js'
-import { revision } from '../api/store.js'
+import { revision } from '../api/revision.js'
 import { getTheme, setTheme } from '../lib/theme.js'
 import OpenJioWordmark from './brand/OpenJioWordmark.vue'
 import UserAvatar from './UserAvatar.vue'
-import { toast } from '../lib/toast.js'
+import { toast, toastError } from '../lib/toast.js'
 import { confirmDialog } from '../lib/confirm.js'
 
 const route = useRoute()
@@ -16,6 +16,7 @@ const user = computed(() => {
   return session.userId ? currentUser() : null
 })
 const menuOpen = ref(false)
+const resetting = ref(false)
 const scrolled = ref(false)
 const onScroll = () => { scrolled.value = window.scrollY > 4 }
 const menuEl = ref(null)
@@ -62,10 +63,15 @@ function doSignOut() {
   router.push({ name: 'signin' })
 }
 async function doReset() {
-  if (!(await confirmDialog({ title: 'Reset demo data?', message: 'Everything in this browser goes back to the starting sample, including your plans.', confirmLabel: 'Reset', danger: true }))) return
-  resetDemo()
-  toast('Demo data reset')
-  router.push('/')
+  if (resetting.value) return
+  if (!(await confirmDialog({ title: 'Reset demo data?', message: 'Everything in this browser goes back to the starting sample, including your plans.', confirmLabel: 'Reset demo', danger: true }))) return
+  resetting.value = true
+  try {
+    const result = await resetDemo()
+    await router.push('/')
+    toast(result?.anchorDate ? `Demo reset. Outings start ${result.anchorDate}.` : 'Demo data reset')
+  } catch (error) { toastError(error) }
+  finally { resetting.value = false }
 }
 const allLinks = [
   { to: '/', label: 'Home', key: 'home', auth: true },
@@ -114,7 +120,7 @@ function isActive(key) {
             </div>
             <RouterLink to="/profile" class="menu-item">Profile and interests</RouterLink>
             <button v-if="isDemo" type="button" class="menu-item" @click="switchPerson">Switch person</button>
-            <button v-if="isDemo" type="button" class="menu-item" @click="doReset">Reset demo data</button>
+            <button v-if="isDemo" type="button" class="menu-item" :disabled="resetting" @click="doReset">Reset demo data</button>
             <button type="button" class="menu-item" @click="doSignOut">Sign out</button>
           </nav>
         </div>

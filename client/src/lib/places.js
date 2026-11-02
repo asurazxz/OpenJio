@@ -1,6 +1,6 @@
 import { getProviderToken } from '../api/index.js'
 
-const base = (import.meta.env?.VITE_API_BASE || 'http://localhost:8787').replace(/\/$/, '')
+const base = (import.meta.env?.VITE_DATA_MODE === 'demo' ? (import.meta.env?.VITE_API_BASE || '/backend') : '/backend').replace(/\/$/, '')
 
 async function request(path, params, signal) {
   let response

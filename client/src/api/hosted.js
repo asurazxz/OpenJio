@@ -1,13 +1,34 @@
 import { createClient } from '@supabase/supabase-js'
 import { reactive } from 'vue'
-import { revision } from './store.js'
+import { revision } from './revision.js'
 import { createHostedAdapter, ApiError } from './hosted-adapter.js'
-const env = import.meta.env || {}
-const url = env.VITE_SUPABASE_URL
-const key = env.VITE_SUPABASE_PUBLISHABLE_KEY || env.VITE_SUPABASE_ANON_KEY
-const base = (env.VITE_API_BASE || 'http://localhost:8787').replace(/\/$/, '')
-if (!url || !key) throw new ApiError('configuration', 'Shared accounts require the OpenJio Supabase URL and publishable key.')
-const client = createClient(url, key)
+// Docker supplies public configuration at runtime so changing ports/hostnames
+// never requires rebuilding the bundle. Server credentials are never included.
+let client, configuring
+async function getClient() {
+  if (client) return client
+  if (!configuring) configuring = (async () => {
+    try {
+      const response = await fetch('/config.json', { cache: 'no-store', signal: AbortSignal.timeout(8000) })
+      if (!response.ok) throw new Error('config unavailable')
+      const runtime = await response.json()
+      if (!runtime.supabaseUrl || !runtime.supabaseAnonKey) throw new Error('config incomplete')
+      const url = new URL(runtime.supabaseUrl, window.location.origin).href
+      client = createClient(url, runtime.supabaseAnonKey)
+      return client
+    } catch {
+      throw new ApiError('configuration', 'Unable to connect to OpenJio. Please check the server and try again.')
+    } finally { configuring = null }
+  })()
+  return configuring
+}
+// Defer connection until initialization so a missing backend renders an account
+// error instead of preventing the entire application module from loading.
+const auth = Object.fromEntries(['getSession', 'signInWithPassword', 'signUp', 'signOut'].map(method => [
+  method, async (...args) => (await getClient()).auth[method](...args),
+]))
+auth.onAuthStateChange = callback => client.auth.onAuthStateChange(callback)
+const base = '/backend'
 async function request(operation, args, token) {
   let response
   try {
@@ -20,9 +41,9 @@ async function request(operation, args, token) {
   if (!response.ok) throw new ApiError(body.error || 'unavailable', body.message || 'The request could not be completed.')
   return body.result
 }
-const api = createHostedAdapter({ auth: client.auth, request, reactive, onRevision: () => { revision.value++ } })
+const api = createHostedAdapter({ auth, request, reactive, onRevision: () => { revision.value++ } })
 api.providerToken = async () => {
-  const { data, error } = await client.auth.getSession()
+  const { data, error } = await auth.getSession()
   if (error) throw new ApiError('auth', 'Please sign in again.')
   return data.session?.access_token || null
 }

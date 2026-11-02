@@ -78,7 +78,7 @@ function scrollToHow(event) {
 </template>
 
 <style scoped>
-/* Hallmark: Hawker Glow inherited from docs/DESIGN.md; signature: an outing takes shape on the product's map. */
+/* Hallmark: Hawker Glow inherited from docs/ARCHITECTURE.md; signature: an outing takes shape on the product's map. */
 /* Critique: keep the map dominant, the copy brief, and the account action visible without waiting for animation. */
 /* Hallmark · waive 26b · Links use the shared .btn interaction states in app.css · This page contains navigation links rather than disabled form controls. */
 .landing-page a:focus-visible { outline: 3px solid var(--oj-focus); outline-offset: 3px; }

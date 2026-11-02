@@ -4,7 +4,7 @@ import { sgParts, sgStartOfDay, sgDateKey, fmtTime, toMs, fromDateKey, DAY } fro
 import { areaLabel } from '../../lib/labels.js'
 import CategoryIcon from '../brand/CategoryIcon.vue'
 
-// Next seven days from today: dots for Open Jios, events and day-specific deals, plus the user's own jios.
+// Browse seven-day windows anchored on today, including retained past events and outings.
 const props = defineProps({
   listings: { type: Array, default: () => [] },
   hangouts: { type: Array, default: () => [] },
@@ -16,9 +16,19 @@ const CODES = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT']
 const MAX_ROWS = 4
 
 const today = sgStartOfDay(Date.now())
-const dayBounds = Array.from({ length: 7 }, (_, i) => {
-  const start = today + i * DAY
+const weekOffset = ref(0)
+const dayBounds = computed(() => Array.from({ length: 7 }, (_, i) => {
+  const start = today + (weekOffset.value * 7 + i) * DAY
   return { start, end: start + DAY, key: sgDateKey(start), p: sgParts(start) }
+}))
+const weekTitle = computed(() => weekOffset.value === 0 ? 'This week around you'
+  : weekOffset.value === -1 ? 'Last week around you'
+    : weekOffset.value === 1 ? 'Next week around you' : 'Events around you')
+const weekRange = computed(() => {
+  const first = dayBounds.value[0].p, last = dayBounds.value[6].p
+  const month = p => MONTHS[p.month - 1].slice(0, 3)
+  if (first.year !== last.year) return `${first.day} ${month(first)} ${first.year} – ${last.day} ${month(last)} ${last.year}`
+  return `${first.day}${first.month !== last.month ? ` ${month(first)}` : ''}–${last.day} ${month(last)} ${last.year}`
 })
 
 // "6–11 pm" when both ends share am/pm, otherwise "6 pm–2 am".
@@ -43,7 +53,7 @@ function dealOn(l, d) {
   return v.dateFrom === d.key || v.dateTo === d.key
 }
 
-const days = computed(() => dayBounds.map((d, i) => {
+const days = computed(() => dayBounds.value.map((d, i) => {
   const items = []
   for (const h of props.hangouts) {
     const s = h.lockedSlot
@@ -73,8 +83,9 @@ const days = computed(() => dayBounds.map((d, i) => {
   const kinds = ['jio', 'event', 'deal'].filter((k) => items.some((x) => x.kind === k))
   const long = `${WEEKDAYS[d.p.weekday]} ${d.p.day} ${MONTHS[d.p.month - 1]}`
   const count = items.length
-  const label = `${i === 0 ? 'Today, ' : ''}${long}, ${count ? `${count} ${count === 1 ? 'thing' : 'things'} on${mine ? ', including your jio' : ''}` : 'nothing on'}`
-  return { ...d, i, items, mine, kinds, label, long, wd: WEEKDAYS[d.p.weekday].slice(0, 3) }
+  const isToday = d.start === today, past = d.start < today
+  const label = `${isToday ? 'Today, ' : past ? 'Past, ' : ''}${long}, ${count ? `${count} ${count === 1 ? 'thing' : 'things'} on${mine ? ', including your jio' : ''}` : 'nothing on'}`
+  return { ...d, i, items, mine, kinds, label, long, isToday, past, wd: WEEKDAYS[d.p.weekday].slice(0, 3) }
 }))
 
 const picked = ref(null)
@@ -84,13 +95,35 @@ const rows = computed(() => active.value.items.slice(0, MAX_ROWS))
 const more = computed(() => active.value.items.length - rows.value.length)
 const anything = computed(() => days.value.some((d) => d.items.length))
 const KIND_LABEL = { jio: 'Open Jio', event: 'Event', deal: 'Deal' }
+
+function changeWeek(offset) {
+  weekOffset.value += offset
+  picked.value = null
+}
+function returnToToday() {
+  weekOffset.value = 0
+  picked.value = 0
+}
 </script>
 
 <template>
   <section class="week" aria-labelledby="week-title">
     <div class="week-head">
-      <h2 id="week-title" class="sec-title">This week around you</h2>
+      <h2 id="week-title" class="sec-title">{{ weekTitle }}</h2>
       <RouterLink to="/discover" class="small fw-bold">See all in Discover</RouterLink>
+    </div>
+
+    <div class="week-toolbar">
+      <p class="week-range tnum" role="status" aria-live="polite" aria-atomic="true">{{ weekRange }}</p>
+      <div class="week-controls" role="group" aria-label="Browse weeks">
+        <button type="button" class="btn btn-ghost btn-sm today-btn" :disabled="weekOffset === 0 && active.isToday" @click="returnToToday">Today</button>
+        <button type="button" class="week-arrow" aria-label="Previous week" title="Previous week" @click="changeWeek(-1)">
+          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="m14 6-6 6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg>
+        </button>
+        <button type="button" class="week-arrow" aria-label="Next week" title="Next week" @click="changeWeek(1)">
+          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="m10 6 6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg>
+        </button>
+      </div>
     </div>
 
     <div class="strip">
@@ -99,13 +132,15 @@ const KIND_LABEL = { jio: 'Open Jio', event: 'Event', deal: 'Deal' }
         :key="d.key"
         type="button"
         class="day"
-        :class="{ mine: d.mine, sel: d.i === activeIndex, today: d.i === 0 }"
+        :class="{ mine: d.mine, sel: d.i === activeIndex, today: d.isToday, past: d.past }"
         :aria-pressed="d.i === activeIndex"
+        :aria-current="d.isToday ? 'date' : undefined"
         :aria-label="d.label"
         @click="picked = d.i"
       >
         <span class="d-wd" aria-hidden="true">{{ d.wd }}</span>
         <span class="d-num tnum" aria-hidden="true">{{ d.p.day }}</span>
+        <span v-if="d.past" class="d-past" aria-hidden="true">Past</span>
         <span class="d-dots" aria-hidden="true">
           <CategoryIcon v-if="d.mine" name="hangout" :size="16" class="d-ico" />
           <i v-for="k in d.kinds" :key="k" class="dot" :class="'dot-' + k"></i>
@@ -121,7 +156,7 @@ const KIND_LABEL = { jio: 'Open Jio', event: 'Event', deal: 'Deal' }
     </p>
 
     <div class="day-list" aria-live="polite">
-      <h3 class="dl-title">{{ active.i === 0 ? 'Today' : active.long }}</h3>
+      <h3 class="dl-title">{{ active.isToday ? 'Today' : active.long }}</h3>
       <ul v-if="rows.length" class="rows">
         <li v-for="r in rows" :key="r.id">
           <RouterLink :to="r.to" class="item" :class="'r-' + r.kind">
@@ -134,7 +169,7 @@ const KIND_LABEL = { jio: 'Open Jio', event: 'Event', deal: 'Deal' }
           </RouterLink>
         </li>
       </ul>
-      <p v-else class="quiet">{{ anything ? 'Nothing on this day. Try another one.' : 'Quiet week so far. Check Discover for ideas.' }}</p>
+      <p v-else class="quiet">{{ anything ? 'Nothing on this day. Try another one.' : weekOffset < 0 ? 'No saved events for this week. Try another week.' : 'Nothing listed for this week yet. Check Discover for ideas.' }}</p>
       <p v-if="more > 0" class="small mb-0"><RouterLink to="/discover">{{ more }} more in Discover</RouterLink></p>
     </div>
   </section>
@@ -144,6 +179,14 @@ const KIND_LABEL = { jio: 'Open Jio', event: 'Event', deal: 'Deal' }
 .week { margin-bottom: 32px; }
 .week-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-bottom: 12px; }
 .sec-title { font-size: 1.25rem; margin: 0; }
+.week-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+.week-range { margin: 0; color: var(--ink-2); font-size: .9rem; font-weight: 600; }
+.week-controls { display: flex; align-items: center; gap: 6px; }
+.today-btn { margin-right: 2px; }
+.week-arrow { display: grid; place-items: center; width: 44px; height: 44px; padding: 0; border: 1px solid var(--line-control); border-radius: 12px; background: var(--card); color: var(--ink); cursor: pointer; }
+.week-arrow:hover { background: var(--paper-2); border-color: var(--ink-2); }
+.week-arrow:active { transform: translateY(1px); }
+.week-arrow:focus-visible { outline: 3px solid var(--oj-focus); outline-offset: 3px; }
 .strip { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 8px; }
 .day {
   display: flex;
@@ -163,6 +206,12 @@ const KIND_LABEL = { jio: 'Open Jio', event: 'Event', deal: 'Deal' }
 .day.sel { border-color: var(--ink); box-shadow: 0 0 0 1px var(--ink); }
 .day.mine { background: var(--tomato); border-color: var(--tomato); color: var(--on-accent); }
 .day.mine.sel { border-color: var(--ink); }
+.day.past { background: var(--paper-2); color: var(--ink-2); }
+.day.mine.past { background: var(--tomato-soft); border-color: var(--line-strong); }
+.day.past.sel { border-color: var(--ink); }
+.day.past .d-wd { opacity: 1; }
+.day.past .d-ico { color: var(--tomato-ink); }
+.d-past { font-size: .7rem; line-height: 1.2; color: var(--ink-2); }
 .d-wd { font-size: 0.75rem; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; opacity: 0.8; }
 .d-num { font-family: var(--font-display); font-weight: 900; font-size: 1.5rem; line-height: 1.1; }
 .today:not(.mine) .d-num { color: var(--tomato-ink); }
