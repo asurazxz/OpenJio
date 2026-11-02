@@ -1,8 +1,9 @@
 <script setup>
 import { ref, computed, watch, onBeforeUnmount } from 'vue'
-import { getPlan, lateJoin, reopenVoting, setStage, AREAS, currentUser } from '../api/index.js'
+import { getPlan, lateJoin, reopenVoting, setStage, updateHangout, AREAS, currentUser } from '../api/index.js'
 import { useLive } from '../composables/useLive.js'
 import { fmtTime, fmtDuration, fmtRange, fmtDay, sgDateKey, fromDateKey, MIN } from '../lib/time.js'
+import { buildItineraryText, buildIcs, icsFileName, planLink, meetingLabel, stopLine, directionsUrl as stopDirectionsUrl, sourceUrl, bookingChecks } from '../lib/handoff.js'
 import { forecastNear } from '../lib/weather.js'
 import { toast, toastError } from '../lib/toast.js'
 import { confirmDialog } from '../lib/confirm.js'
@@ -138,6 +139,48 @@ async function shareEta() {
 }
 const markers = computed(() => (plan.value?.stops || []).map((s, i) => ({ id: i, lat: s.listing.lat, lng: s.listing.lng, label: String(i + 1), title: s.listing.title, active: result.value?.best?.index === i })))
 
+// ---- Handoff: what the group needs to actually go ----
+const handoffStops = computed(() => plan.value?.stops || [])
+const link = computed(() => planLink(location.origin, h.value.id))
+const meeting = computed(() => meetingLabel(h.value))
+const checks = computed(() => bookingChecks(handoffStops.value))
+const meetingDraft = ref('')
+const meetingSaving = ref(false)
+async function copyText(text, done) {
+  try {
+    await navigator.clipboard.writeText(text)
+    toast(done)
+  } catch {
+    toastError(new Error('Could not copy. Select the text and copy it instead.'))
+  }
+}
+const copyItinerary = () => copyText(buildItineraryText({ hangout: h.value, stops: handoffStops.value, link: link.value }), 'Itinerary copied')
+const copyLink = () => copyText(link.value, 'Plan link copied')
+function downloadCalendar() {
+  const ics = buildIcs({ hangout: h.value, stops: handoffStops.value, link: link.value })
+  const url = URL.createObjectURL(new Blob([ics], { type: 'text/calendar;charset=utf-8' }))
+  const a = document.createElement('a')
+  a.href = url
+  a.download = icsFileName(h.value.title)
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  setTimeout(() => URL.revokeObjectURL(url), 1000)
+}
+async function saveMeetingPoint() {
+  if (meetingSaving.value || !isHost.value || h.value.stage !== 'final') return
+  meetingSaving.value = true
+  try {
+    await updateHangout(h.value.id, { meetingPoint: meetingDraft.value })
+    meetingDraft.value = ''
+    toast('Meeting point saved')
+  } catch (e) {
+    toastError(e)
+  } finally {
+    meetingSaving.value = false
+  }
+}
+
 async function reopen() {
   if (h.value.stage !== 'final' || !isHost.value) return
   if (!(await confirmDialog({ title: 'Reopen voting?', message: 'Everyone will see the plan as not final until you confirm again.', confirmLabel: 'Reopen voting' }))) return
@@ -173,6 +216,7 @@ async function end(stage) {
       <div>
         <h3 id="unconfirmed-title" class="u-title">Not confirmed yet</h3>
         <p class="u-lede">Once the host confirms the plan, the final timeline, the late-join helper and the weather for the outing unlock here.</p>
+        <p class="u-handoff">Once the host confirms, you'll get a shareable itinerary and calendar file here.</p>
       </div>
 
       <div>
@@ -218,6 +262,44 @@ async function end(stage) {
     <div v-else-if="planLoading && !plan" class="py-4" role="status">Loading the confirmed plan…</div>
     <div v-else-if="planError" class="notice danger" role="alert"><p>{{ planError.message }}</p><button type="button" class="btn btn-secondary btn-sm" @click="reloadPlan">Retry loading plan</button></div>
     <div v-else-if="plan" class="row g-4">
+      <div v-if="h.stage === 'final'" class="col-12">
+        <section class="handoff card-x" aria-labelledby="handoff-title">
+          <div class="ho-head">
+            <div class="ho-main">
+              <h3 id="handoff-title" class="ho-title">Your plan, ready to share</h3>
+              <p class="ho-meet" data-testid="meeting-point">
+                <template v-if="meeting.exact"><span class="ho-meet-label">Meet at:</span> <strong>{{ meeting.text }}</strong></template>
+                <strong v-else>{{ meeting.text }}</strong>
+              </p>
+              <form v-if="isHost && !meeting.exact" class="ho-set" @submit.prevent="saveMeetingPoint">
+                <label for="meeting-point" class="small muted">Set an exact meeting point</label>
+                <div class="ho-set-row">
+                  <input id="meeting-point" v-model="meetingDraft" class="form-control" maxlength="120" placeholder="Bugis MRT, exit C" autocomplete="off" />
+                  <button type="submit" class="btn btn-secondary" :disabled="meetingSaving || !meetingDraft.trim()">Save</button>
+                </div>
+              </form>
+            </div>
+            <div class="ho-actions">
+              <button type="button" class="btn btn-primary" @click="copyItinerary">Copy itinerary</button>
+              <button type="button" class="btn btn-secondary" @click="downloadCalendar">Add to calendar</button>
+              <button type="button" class="btn btn-ghost" @click="copyLink">Copy plan link</button>
+            </div>
+          </div>
+          <ol class="ho-stops tnum">
+            <li v-for="(s, i) in handoffStops" :key="s.id || i">
+              <span class="ho-stop-text">{{ stopLine(s) }}</span>
+              <span class="ho-links">
+                <a :href="stopDirectionsUrl(s.listing)" target="_blank" rel="noopener noreferrer" :aria-label="`Directions to ${s.listing.title}`">Directions</a>
+                <a v-if="sourceUrl(s.listing)" :href="sourceUrl(s.listing)" target="_blank" rel="noopener noreferrer" :aria-label="`Source for ${s.listing.title}`">Source</a>
+              </span>
+            </li>
+          </ol>
+          <p class="ho-book">Nothing is booked through OpenJio. Check tickets or reservations before you go.</p>
+          <ul v-if="checks.length" class="ho-checks">
+            <li v-for="c in checks" :key="c.title"><strong>Check:</strong> {{ c.title }} ({{ c.text }})</li>
+          </ul>
+        </section>
+      </div>
       <div class="col-lg-7">
         <div class="d-flex justify-content-between align-items-baseline flex-wrap gap-2 mb-3">
           <h3 class="m-0 tnum">{{ fmtRange(h.lockedSlot.start, h.lockedSlot.end) }}</h3>
@@ -310,6 +392,25 @@ async function end(stage) {
 </template>
 
 <style scoped>
+.handoff { padding: 18px 20px; }
+.ho-head { display: flex; flex-wrap: wrap; gap: 16px 24px; justify-content: space-between; align-items: flex-start; }
+.ho-main { flex: 1 1 280px; min-width: 0; }
+.ho-title { margin: 0 0 6px; }
+.ho-meet { margin: 0 0 8px; font-size: 1.15rem; overflow-wrap: anywhere; }
+.ho-meet-label { color: var(--ink-2); font-weight: 700; }
+.ho-set-row { display: flex; gap: 8px; max-width: 420px; }
+.ho-set-row .btn { flex: none; }
+.ho-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.ho-actions .btn { min-height: 44px; }
+.ho-stops { list-style: none; margin: 16px 0 0; padding: 0; display: grid; gap: 0; }
+.ho-stops li { display: flex; flex-wrap: wrap; gap: 2px 14px; justify-content: space-between; align-items: baseline; padding: 8px 0; border-top: 1px solid var(--line); }
+.ho-stop-text { min-width: 0; overflow-wrap: anywhere; }
+.ho-links { display: flex; gap: 14px; font-weight: 700; font-size: 0.9rem; }
+.ho-links a { display: inline-flex; align-items: center; min-height: 32px; }
+.ho-book { margin: 12px 0 0; color: var(--ink-2); font-size: 0.9rem; }
+.ho-checks { margin: 6px 0 0; padding-left: 18px; font-size: 0.9rem; color: var(--ink-2); }
+.u-handoff { margin: 8px 0 0; font-weight: 700; max-width: 60ch; }
+@media (max-width: 480px) { .ho-actions .btn { flex: 1 1 100%; } .ho-set-row { max-width: none; } }
 .result { padding: 14px 16px; border-radius: 16px; background: var(--teal-soft); border: 1px solid color-mix(in srgb, var(--teal) 35%, transparent); }
 .r-label { margin: 0; font-weight: 800; font-size: 0.85rem; color: var(--teal-ink); }
 .r-title { font-family: var(--font-display); font-weight: 900; font-size: 1.25rem; margin: 2px 0 6px; }

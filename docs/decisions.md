@@ -359,3 +359,12 @@ Discover's places come from OpenStreetMap via the Geoapify Places API (the publi
 ### D39. Candidate pools keep activities
 
 Implementation fix (2 November): itinerary candidate pools cap meals at 10 and fill the remaining slots with activities first, because meals cannot run back to back and restaurant-heavy live data otherwise left no feasible chain.
+
+### D40. Product ideas from the UI/UX audit: build three now, defer two until Supabase
+
+**Agreed explicitly (2 November 2026).** From the "Product ideas worth testing" in `docs/UI-UX-AUDIT-2026-11-02.md`, three are built now and two wait for the hosted database:
+
+- Built: plain-language explanations of best times and plans, including an estimated spend per person shown only when every stop has a known price (idea 3); rescue options when no time works, which the host chooses and which are never applied automatically (idea 5); and a final handoff on On the day: copy itinerary, calendar file, an exact meeting point, directions and source links, and a "nothing is booked" reminder (idea 4).
+- Deferred until the hosted Supabase database is integrated: versioned plans with a "What changed?" review (idea 2) and repeat-group invites with a pending-invite state (idea 6). Both need engine and schema changes that only make sense once the hosted backend is live.
+
+The exact meeting point is a new optional hangout field (`meetingPoint`, up to 120 characters, set by the host, shown to members only, never in invite previews). It works in demo mode. Hosted mode needs a migration before it is saved: add a nullable `meeting_point text` column (120-character check) to `public.hangouts`, and add it to the snapshot `jsonb_build_object` and to the insert/upsert column lists in the domain functions from `20261029145118_hosted_domain.sql` (re-created in a new migration).

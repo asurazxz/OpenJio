@@ -253,7 +253,7 @@ function onTabKey(e, i) {
             class="visually-hidden"
           >{{ PHASE_TEXT[phaseOf(i)] }}</span>
           <div :id="`panel-${tab}`" role="tabpanel" :aria-labelledby="`tab-${tab}`" class="panel">
-            <TimePanel v-if="tab === 'time'" :detail="detail" @locked="go('plan')" />
+            <TimePanel v-if="tab === 'time'" :detail="detail" @locked="go('plan')" @edit-dates="editing = true" />
             <PlanPanel v-else-if="tab === 'plan'" :detail="detail" @goto="go" />
             <GoPanel v-else-if="tab === 'go'" :detail="detail" @goto="go" />
           </div>

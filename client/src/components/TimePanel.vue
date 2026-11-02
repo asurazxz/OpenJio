@@ -1,9 +1,10 @@
 <script setup>
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router'
-import { saveAvailability, clearAvailability, getSlots, lockSlot, unlockSlot, previewSlot } from '../api/index.js'
+import { saveAvailability, clearAvailability, getSlots, lockSlot, unlockSlot, previewSlot, setRequired } from '../api/index.js'
 import { useLive } from '../composables/useLive.js'
-import { dateKeysBetween, fmtRange, fmtDuration, MIN, sgDateKey, sgParts, sgTime } from '../lib/time.js'
+import { dateKeysBetween, fmtRange, fmtDuration, fmtDay, MIN, sgDateKey, sgParts, sgTime } from '../lib/time.js'
+import { timeSpan } from '../lib/algo/slots.js'
 import { toast, toastError } from '../lib/toast.js'
 import { confirmDialog } from '../lib/confirm.js'
 import AvailabilityGrid from './AvailabilityGrid.vue'
@@ -11,7 +12,7 @@ import AppDialog from './AppDialog.vue'
 import UserAvatar from './UserAvatar.vue'
 
 const props = defineProps({ detail: { type: Object, required: true } })
-const emit = defineEmits(['locked'])
+const emit = defineEmits(['locked', 'edit-dates'])
 
 const h = computed(() => props.detail.hangout)
 const isHost = computed(() => h.value.myRole === 'host')
@@ -135,9 +136,10 @@ async function lockPreview() {
   if (!preview.value?.ok || !adjust.value) return
   await lock({ start: preview.value.start, end: preview.value.end })
 }
-// The reasons after the headcount, as one short line: "1 person hasn't replied · within preferred hours".
+// The extra reasons after the headline, as one short line: "Weekend · At comfortable hours".
 function why(slot) {
-  const text = slot.reasons.slice(1).join(' · ')
+  // Replies are already in the headline, so they are left out here.
+  const text = slot.reasons.slice(1).filter((r) => !/replied/.test(r)).join(' · ')
   return text.charAt(0).toUpperCase() + text.slice(1)
 }
 // Split who cannot come into "said no" and "has not answered", so the two are never confused.
@@ -204,20 +206,71 @@ async function resolveUnsaved() {
   if (choice === true && await save('Free times saved. The best times may have changed, so review them before locking.')) closeAdjust()
   return false
 }
-async function lock(slot) {
+// `extra.makeOptional` (a user id) first marks that person optional; `extra.short` allows a time under 2 hours.
+async function lock(slot, extra = {}) {
   if (lockingId.value) return
   if (dirty.value && !(await resolveUnsaved())) return
   lockingId.value = slot.id || `${slot.start}:${slot.end}`
+  let madeOptional = false
   try {
-    await lockSlot(h.value.id, { start: slot.start, end: slot.end })
+    if (extra.makeOptional) {
+      await setRequired(h.value.id, extra.makeOptional, false)
+      madeOptional = true
+    }
+    await lockSlot(h.value.id, { start: slot.start, end: slot.end }, extra.short ? { short: true } : undefined)
     toast('Time locked. Next: shape the plan.')
     closeAdjust()
     emit('locked')
   } catch (e) {
+    if (madeOptional) reload()
     toastError(e)
   } finally {
     lockingId.value = null
   }
+}
+
+// Rescue options when no time works. The host picks one; nothing is applied automatically.
+const rescue = computed(() => (slots.value && !slots.value.slots.length && !slots.value.missingRequired.length ? slots.value.rescue : null))
+const rescueOptions = computed(() => (rescue.value?.options || []).slice(0, 3))
+const rescueBusy = ref('')
+const peopleList = (names) => (names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}` : names[0] || 'nobody')
+const shortWhen = (o) => `${fmtDay(o.start).split(' ')[0]} ${timeSpan(o.start, o.end)}`
+function optionTitle(o) {
+  if (o.kind === 'optional') return `${shortWhen(o)} works if ${o.name} is optional`
+  if (o.kind === 'without') return `Lock it now and go on without ${o.name}`
+  return 'A shorter time works for everyone'
+}
+function optionEffect(o) {
+  const who = peopleList(o.attendeeNames)
+  if (o.kind === 'optional') return `Works for ${who}. ${o.name} would still be asked, but could miss it. You then choose the time.`
+  if (o.kind === 'without') return `Locks ${fmtRange(o.start, o.end)} for ${who}. ${o.name} becomes optional and may not be able to come.`
+  return `${fmtRange(o.start, o.end)} is free for everyone who replied, but only for ${fmtDuration(o.minutes)}, less than the usual 2 hours.`
+}
+function optionButton(o) {
+  if (o.kind === 'optional') return `Make ${o.name} optional`
+  if (o.kind === 'without') return `Use ${shortWhen(o)} without ${o.name}`
+  return `Use ${shortWhen(o)}`
+}
+async function chooseRescue(o) {
+  if (rescueBusy.value || lockingId.value) return
+  if (o.kind === 'optional') {
+    rescueBusy.value = o.id
+    try {
+      await setRequired(h.value.id, o.userId, false)
+      toast(`${o.name} is now optional`)
+      reload()
+    } catch (e) {
+      toastError(e)
+    } finally {
+      rescueBusy.value = ''
+    }
+    return
+  }
+  await lock({ start: o.start, end: o.end, id: o.id }, o.kind === 'without' ? { makeOptional: o.userId } : { short: true })
+}
+// The Edit dialog belongs to the hangout page, which opens it on this event.
+function addDates() {
+  emit('edit-dates')
 }
 async function unlock() {
   if (!(await confirmDialog({ title: 'Change the time?', message: 'Everyone will need to agree on the plan again.', confirmLabel: 'Change time', danger: true }))) return
@@ -293,12 +346,26 @@ async function unlock() {
             <div v-if="slotsError" class="notice danger mt-3" role="alert"><p>Suggested times could not be loaded. Your saved availability is unchanged.</p><button type="button" class="btn btn-secondary btn-sm" @click="reload">Try again</button></div>
             <p class="small muted mb-3 tnum">{{ slots ? `${slots.responded} of ${slots.total} replied.` : '' }} People who have not replied count as unknown, not free.</p>
 
-            <div v-if="slots?.missingRequired.length" class="notice mb-3">
-              <p>Waiting on {{ slots.missingRequired.join(', ') }}. Required people must reply before times are suggested.</p>
+            <div v-if="slots?.missingRequired.length" class="notice mb-3" data-testid="waiting-required">
+              <p><strong>Waiting on {{ peopleList(slots.missingRequired) }}.</strong> Required people need to reply first, then the best times appear here.</p>
             </div>
-            <div v-else-if="slots && !slots.slots.length" class="notice mb-3">
-              <p>No time works yet for the required people for at least 2 hours. Try marking more hours, or ask the host to make someone optional.</p>
-            </div>
+            <section v-else-if="rescue" class="rescue mb-3" aria-labelledby="rescue-h" data-testid="rescue">
+              <h4 id="rescue-h" class="rescue-h">No time works for everyone yet</h4>
+              <p v-if="rescueOptions.length" class="small muted mb-2">{{ isHost ? 'Pick what to change. Nothing changes until you choose.' : 'The host can choose one of these. Nothing changes until they do.' }}</p>
+              <p v-else class="small muted mb-2">Nobody overlaps for at least 2 hours, even without one person. Marking more free hours or adding dates may help.</p>
+              <ul class="rescue-list">
+                <li v-for="o in rescueOptions" :key="o.id" class="rescue-opt">
+                  <p class="rescue-t">{{ optionTitle(o) }}</p>
+                  <p class="small muted m-0">{{ optionEffect(o) }}</p>
+                  <button v-if="isHost && !isSoloOrPublic" type="button" class="btn btn-secondary btn-sm" :disabled="!!rescueBusy || !!lockingId" @click="chooseRescue(o)">{{ rescueBusy === o.id || lockingId === o.id ? 'Working…' : optionButton(o) }}</button>
+                </li>
+                <li class="rescue-opt">
+                  <p class="rescue-t">Add more dates</p>
+                  <p class="small muted m-0">More days may give people a time in common. Changing dates asks everyone to mark their free times again.</p>
+                  <button v-if="isHost && !isSoloOrPublic" type="button" class="btn btn-secondary btn-sm" @click="addDates">Add more dates</button>
+                </li>
+              </ul>
+            </section>
 
             <TransitionGroup v-if="slots?.slots.length" tag="ol" name="oj-rise" appear class="slots">
               <li v-for="(s, i) in slots.slots" :key="s.id">
@@ -307,7 +374,7 @@ async function unlock() {
                     <span class="rank tnum" :aria-label="`Rank ${i + 1}`">#{{ i + 1 }}</span>
                     <div class="min-w-0">
                       <p :id="`slot-${s.id}`" class="slot-time tnum">{{ fmtRange(s.start, s.end) }}</p>
-                      <p class="slot-count tnum"><strong>{{ s.attendees.length }} of {{ slots.total }}</strong> available</p>
+                      <p class="slot-line">{{ s.headline }}</p>
                     </div>
                   </div>
                   <ul class="who">
@@ -315,7 +382,7 @@ async function unlock() {
                     <li v-if="breakdown(s).cant.length" class="w-cant"><span class="w-k">Can't</span> {{ breakdown(s).cant.join(', ') }}</li>
                     <li v-if="breakdown(s).pending.length" class="w-pend"><span class="w-k">No reply</span> {{ breakdown(s).pending.join(', ') }}</li>
                   </ul>
-                  <p v-if="s.reasons.length > 1" class="small muted m-0">{{ why(s) }}</p>
+                  <p v-if="why(s)" class="small muted m-0">{{ why(s) }}</p>
                   <div class="slot-act">
                     <button type="button" class="btn-text" :aria-pressed="chosen === s.id" @click="chosen = s.id; comparisonOpen = true">Show on grid</button>
                     <button v-if="isHost && !isSoloOrPublic" type="button" class="btn btn-sm" :class="i === 0 ? 'btn-primary' : 'btn-secondary'" :disabled="!!lockingId" @click="lock(s)">{{ lockingId === s.id ? 'Locking…' : 'Lock this time' }}</button>
@@ -455,7 +522,12 @@ async function unlock() {
 }
 .best .rank { background: var(--tomato); color: var(--on-accent); transform: rotate(-4deg); }
 .slot-time { font-weight: 800; margin: 0; font-family: var(--font-display); font-size: 1.05rem; }
-.slot-count { margin: 0; font-size: 0.9rem; }
+.slot-line { margin: 2px 0 0; font-size: 0.92rem; color: var(--ink); }
+.rescue { padding: 14px; border: 1px solid var(--line); border-radius: 16px; background: var(--paper-2); }
+.rescue-h { font-family: var(--font-display); font-size: 1.05rem; font-weight: 800; margin: 0 0 4px; }
+.rescue-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
+.rescue-opt { display: grid; gap: 4px; justify-items: start; padding: 12px; border-radius: 12px; background: var(--card); border: 1px solid var(--line); }
+.rescue-t { margin: 0; font-weight: 700; }
 .who { list-style: none; padding: 0; margin: 0; display: grid; gap: 3px; font-size: 0.88rem; }
 .w-k { display: inline-block; min-width: 68px; font-weight: 700; font-size: 0.78rem; padding: 1px 8px; border-radius: 999px; margin-right: 6px; text-align: center; }
 .w-free .w-k { background: var(--teal-soft); color: var(--teal-ink); }

@@ -65,12 +65,12 @@ test('reasons do not claim a fit or a meal that validation rejects', () => {
   const bad = retime([L[0], L[1]], { ...base, slot: { start: sat(12), end: sat(14) } })
   const types = bad.issues.map((i) => i.type)
   assert.ok(types.includes('over_time') && types.includes('no_meal'))
-  assert.ok(!bad.reasons.some((r) => r.startsWith('Fits your slot')), bad.reasons.join(' | '))
+  assert.ok(!bad.reasons.some((r) => r.startsWith('Fits ')), bad.reasons.join(' | '))
   assert.ok(bad.reasons.some((r) => r.includes('outside your slot')))
-  assert.ok(!bad.reasons.some((r) => r.startsWith('Covers')))
+  assert.ok(!bad.reasons.some((r) => r.endsWith(' covered')))
   const good = generateItinerary(base)
-  assert.ok(good.reasons.some((r) => r.startsWith('Fits your slot')))
-  assert.ok(good.reasons.includes('Covers lunch'))
+  assert.ok(good.reasons.some((r) => r.startsWith('Fits ')))
+  assert.ok(good.reasons.includes('Lunch covered'))
 })
 
 test('alternatives keep the plan feasible and match the stop kind', () => {

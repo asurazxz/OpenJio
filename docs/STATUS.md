@@ -63,6 +63,7 @@ How to run: `pnpm --dir client test`, `pnpm --dir client e2e`, `pnpm --dir serve
 6. **Places need opening hours to be listed.** Only about a quarter of OpenStreetMap places have hours, so coverage favours well-maintained venues; visit lengths are defaults by category.
 7. **Weights are tuned on the evaluation cases**, so the beam-versus-greedy comparison is optimistic.
 8. **Weather** cannot show a forecast for outings more than about 4 days away.
+9. **Meeting point is demo-only.** The host's exact meeting point (D40) is not yet stored in hosted mode; it needs the migration described in D40.
 
 ## 6. Next steps
 
@@ -71,7 +72,7 @@ In rough priority order:
 1. Fix plan generation under live travel times (known issue 1).
 2. Decide whether to remove or reduce the sample data now that places, events and deals are live.
 3. Label 30 to 50 posts in `pipeline/labels/labels.json` and run `pipeline/evaluate.py` to measure extraction accuracy.
-4. Connect a hosted Supabase project, apply the four migrations, and run a multi-account journey; then deploy client and server.
+4. Connect a hosted Supabase project, apply the four migrations plus the meeting-point migration (D40), and run a multi-account journey; then deploy client and server. After that, consider versioned plans and repeat-group invites (D40).
 5. Write the README disclosures the course requires (parts relying on AI, credentials for graders) and assign owners in the plan tracker.
 
 ## 7. Where things are

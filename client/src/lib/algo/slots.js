@@ -2,7 +2,7 @@
 // Inputs are each member's FREE intervals (epoch ms). Members who have not responded
 // are unknown, not free, so they never count as available.
 
-import { HOUR, MIN, minutesOfDay, isWeekend, sgStartOfDay, fmtTime } from '../time.js'
+import { HOUR, MIN, minutesOfDay, isWeekend, sgStartOfDay, sgParts, fmtTime, fmtDuration } from '../time.js'
 
 const DEFAULTS = {
   minDurationMins: 120,
@@ -208,9 +208,9 @@ export function rankSlots({ members, availability, rangeStart, rangeEnd, options
     const score = 0.6 * attendance + 0.2 * usable + 0.15 * pref + 0.05 * weekend
     const reasons = [`${attendees.length} of ${total} can make it`]
     if (missing.length && unknown.length) reasons.push(unknown.length === 1 ? "1 person hasn't replied" : `${unknown.length} people haven't replied`)
-    if (pref >= 0.99) reasons.push('within preferred hours')
+    if (pref >= 0.99) reasons.push('at comfortable hours')
     if (weekend) reasons.push('weekend')
-    reasons.push(`free ${fmtTime(c.start)} to ${fmtTime(c.end)}`)
+    reasons.push(`common free window ${fmtTime(c.start)} to ${fmtTime(c.end)}`)
     return {
       id: `${slot.start}-${slot.end}-${attendees.join('.')}`,
       start: slot.start,
@@ -279,4 +279,96 @@ export function heatmap(availability, memberIds, dayStarts, fromMins, toMins) {
     }
     return { day, cells }
   })
+}
+
+/* ---------------- Plain-words summaries ---------------- */
+
+/** "6:20–10:10 pm": the am/pm shows once when both ends share it. */
+export function timeSpan(start, end) {
+  const a = fmtTime(start)
+  const b = fmtTime(end)
+  return `${a.slice(-2) === b.slice(-2) ? a.slice(0, -3) : a}–${b}`
+}
+
+const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+
+/** "Mei, Arjun and Farah"; long lists shorten to "Mei, Arjun and 3 others". */
+export function joinNames(names) {
+  if (names.length <= 1) return names[0] || ''
+  if (names.length <= 3) return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`
+  return `${names.slice(0, 2).join(', ')} and ${names.length - 2} others`
+}
+
+/** "Saturday afternoon, 5 h" */
+export function whenText(start, end) {
+  const p = sgParts(start)
+  const part = p.hour < 12 ? 'morning' : p.hour < 17 ? 'afternoon' : p.hour < 21 ? 'evening' : 'night'
+  return `${WEEKDAYS[p.weekday]} ${part}, ${fmtDuration((end - start) / MIN)}`
+}
+
+/**
+ * The decision facts for a best-time card in one line:
+ * "Mei, Arjun and Farah are free · Jun hasn't replied · Saturday afternoon, 5 h".
+ */
+export function slotHeadline({ start, end, free = [], cant = [], pending = [] }) {
+  const parts = []
+  if (!cant.length && !pending.length) parts.push(free.length === 1 ? `${free[0]} is free` : 'Everyone is free')
+  else if (free.length) parts.push(`${joinNames(free)} ${free.length === 1 ? 'is' : 'are'} free`)
+  if (cant.length) parts.push(`${joinNames(cant)} can't make it`)
+  if (pending.length) parts.push(`${joinNames(pending)} ${pending.length === 1 ? "hasn't" : "haven't"} replied`)
+  parts.push(whenText(start, end))
+  return parts.join(' · ')
+}
+
+/* ---------------- Rescue a failed schedule ---------------- */
+
+const FLOOR_MINS = 60
+
+/**
+ * When no time works for the required people, find honest alternatives the host can choose.
+ * Nothing here is applied automatically; each option says what it would change.
+ *  - "optional": the best time if one blocking required person were optional instead.
+ *  - "without": the same time, locked straight away with that person left out.
+ *  - "shorter": the best time that works for everyone who replied, shorter than the usual minimum
+ *    (never under one hour).
+ * Waiting on required people who have not replied is a calm state, not a failure.
+ * @returns {{state:'waiting'|'options'|'none', waiting:string[], options:object[]}}
+ */
+export function rescueOptions({ members, availability, rangeStart, rangeEnd, options = {} }) {
+  const o = { ...DEFAULTS, ...options }
+  const waiting = members.filter((m) => m.required && !m.responded).map((m) => m.id)
+  const responded = members.filter((m) => m.responded)
+  if (waiting.length) return { state: 'waiting', waiting, options: [] }
+  if (!responded.length) return { state: 'none', waiting: [], options: [] }
+  const common = { availability, rangeStart, rangeEnd }
+  const out = []
+  const pack = (kind, slot, personId = null) => ({
+    id: `${kind}:${personId || ''}:${slot.start}-${slot.end}`,
+    kind,
+    personId,
+    start: slot.start,
+    end: slot.end,
+    attendees: slot.attendees,
+    missing: slot.missing,
+    minutes: Math.round((slot.end - slot.start) / MIN),
+  })
+
+  for (const p of members.filter((m) => m.required && m.responded && !m.host)) {
+    const trial = members.map((m) => (m.id === p.id ? { ...m, required: false } : m))
+    const slot = rankSlots({ members: trial, ...common, options: { ...o, topN: 1 } }).slots[0]
+    if (slot && !slot.attendees.includes(p.id)) out.push(pack('optional', slot, p.id))
+  }
+
+  // Everyone who replied, for less than the usual minimum. Skipped when that minimum is already the floor.
+  if (o.minDurationMins > FLOOR_MINS) {
+    const strict = members.map((m) => (m.responded ? { ...m, required: true } : m))
+    const slot = rankSlots({ members: strict, ...common, options: { ...o, minDurationMins: FLOOR_MINS, topN: 1 } }).slots[0]
+    if (slot && slot.end - slot.start < o.minDurationMins * MIN) out.push(pack('shorter', slot))
+  }
+
+  const rank = (a, b) => b.attendees.length - a.attendees.length || b.minutes - a.minutes || a.start - b.start || a.id.localeCompare(b.id)
+  out.sort(rank)
+  const top = out.find((x) => x.kind === 'optional')
+  if (top) out.push({ ...top, id: `without:${top.personId}:${top.start}-${top.end}`, kind: 'without' })
+  return { state: out.length ? 'options' : 'none', waiting: [], options: out }
 }

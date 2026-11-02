@@ -1,5 +1,5 @@
 import { LISTINGS as DEFAULT_LISTINGS, AREAS, INTERESTS } from '../data/seed-listings.js'
-import { rankSlots, earliestCommonSlot, heatmap, mergeIntervals } from '../lib/algo/slots.js'
+import { rankSlots, earliestCommonSlot, heatmap, mergeIntervals, slotHeadline, rescueOptions } from '../lib/algo/slots.js'
 import { generateItinerary, greedyItinerary, retime, alternativesFor } from '../lib/algo/itinerary.js'
 import { joinSuggestions } from '../lib/algo/reachability.js'
 import { isVerifiedDeal } from '../lib/algo/validity.js'
@@ -438,6 +438,8 @@ async function updateHangout(id, patch) {
     next.title = title.slice(0, 60)
   }
   if (patch.description !== undefined) next.description = String(patch.description).trim().slice(0, 200) || null
+  // An exact place to meet ("Bugis MRT, exit C"), shown to members only; it does not change the plan.
+  if (patch.meetingPoint !== undefined) next.meetingPoint = String(patch.meetingPoint ?? '').trim().slice(0, 120) || null
   if (patch.area !== undefined) {
     const area = AREAS.find((a) => a.slug === patch.area)
     if (!area) throw new ApiError('invalid', 'Choose a start area.')
@@ -672,7 +674,7 @@ async function getSlots(id) {
   requireMember(s, h, user)
   const members = s.members
     .filter((m) => m.hangoutId === id)
-    .map((m) => ({ id: m.userId, required: m.required, responded: Boolean(m.respondedAt) }))
+    .map((m) => ({ id: m.userId, required: m.required, responded: Boolean(m.respondedAt), host: m.role === 'host' }))
   const availability = s.availability[id] || {}
   const rangeStart = fromDateKey(h.dateFrom)
   const rangeEnd = fromDateKey(h.dateTo) + DAY
@@ -687,8 +689,33 @@ async function getSlots(id) {
   }))
   const names = Object.fromEntries(s.users.map((u) => [u.id, u.name.split(' ')[0]]))
   const name = (ids) => ids.map((x) => names[x] || 'Someone')
+  const requiredIds = new Set(members.filter((m) => m.required).map((m) => m.id))
+  const unknownIds = new Set(ranked.unknown)
+  // Each best-time card leads with the decision facts in plain words; required people who cannot come are named as such.
+  const withHeadline = (sl) => slotHeadline({
+    start: sl.start,
+    end: sl.end,
+    free: name(sl.attendees),
+    cant: sl.missing.filter((x) => !unknownIds.has(x)).map((x) => (names[x] || 'Someone') + (requiredIds.has(x) ? ' (required)' : '')),
+    pending: name(sl.missing.filter((x) => unknownIds.has(x))),
+  })
+  // When no time works, offer options the host can choose from. Nothing is applied automatically.
+  let rescue = null
+  if (!ranked.slots.length) {
+    const r = rescueOptions({ members, availability, rangeStart, rangeEnd })
+    rescue = {
+      state: r.state,
+      waiting: name(r.waiting),
+      options: r.options.map((o) => ({
+        id: o.id, kind: o.kind, userId: o.personId, name: o.personId ? names[o.personId] || 'Someone' : null,
+        start: o.start, end: o.end, minutes: o.minutes,
+        attendeeNames: name(o.attendees), missingNames: name(o.missing),
+      })),
+    }
+  }
   return {
-    slots: ranked.slots.map((sl) => ({ ...sl, attendeeNames: name(sl.attendees), missingNames: name(sl.missing) })),
+    rescue,
+    slots: ranked.slots.map((sl) => ({ ...sl, attendeeNames: name(sl.attendees), missingNames: name(sl.missing), headline: withHeadline(sl) })),
     missingRequired: name(ranked.missingRequired),
     unknown: name(ranked.unknown),
     baseline,
@@ -698,9 +725,9 @@ async function getSlots(id) {
   }
 }
 
-function slotAssessment(s, h, slot) {
+function slotAssessment(s, h, slot, minimumMins) {
   const members = s.members.filter(m => m.hangoutId === h.id).map(m => ({ id: m.userId, required: m.required, responded: Boolean(m.respondedAt) }))
-  return assessSlot({ slot, members, availability: s.availability[h.id] || {}, rangeStart: fromDateKey(h.dateFrom), rangeEnd: fromDateKey(h.dateTo) + DAY })
+  return assessSlot({ slot, members, availability: s.availability[h.id] || {}, rangeStart: fromDateKey(h.dateFrom), rangeEnd: fromDateKey(h.dateTo) + DAY, ...(minimumMins ? { minimumMins } : {}) })
 }
 
 async function previewSlot(id, slot) {
@@ -712,7 +739,8 @@ async function previewSlot(id, slot) {
   return { ok: result.ok, errors: result.errors, attendeeNames: names(result.attendees), missingNames: names(result.missing), unknown: names(result.unknown), missingRequired: names(result.missingRequired) }
 }
 
-async function lockSlot(id, slot) {
+// `short` is the host's explicit choice of a time under the usual 2 hours (never under 1 hour), offered when nothing longer works.
+async function lockSlot(id, slot, { short = false } = {}) {
   await wait()
   const user = me()
   const s = load()
@@ -720,7 +748,7 @@ async function lockSlot(id, slot) {
   requireHost(s, h, user)
   if (!slot?.start || !slot?.end || slot.end <= slot.start) throw new ApiError('invalid', 'Choose a slot first.')
   if (h.mode !== 'solo' && h.visibility !== 'public') {
-    const result = slotAssessment(s, h, slot)
+    const result = slotAssessment(s, h, slot, short ? 60 : undefined)
     if (!result.ok) throw new ApiError('invalid', result.errors.join(' '))
   }
   const hadPlan = s.itineraries[id]?.stops.length > 0

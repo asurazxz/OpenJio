@@ -6,6 +6,8 @@
 import { estimateTravel, haversineKm } from '../geo.js'
 import { MIN, minutesOfDay, fmtTime, fmtDuration } from '../time.js'
 import { scheduleAt, isVerifiedDeal } from './validity.js'
+import { timeSpan } from './slots.js'
+import { estimateSpend, fmtSpend, spendGap } from './spend.js'
 
 export const DEFAULT_OPTIONS = {
   maxStops: 4,
@@ -309,24 +311,36 @@ export function alternativesFor(listings, index, input, k = 3) {
   return options.slice(0, k)
 }
 
-/** Plain-language reasons for a plan. */
+/**
+ * Plain-language reasons for a plan. The first line leads with the facts people decide on
+ * (time, stops, spend, travel); the lines after it say why the plan is good.
+ */
 export function explain(stops, parts, ctx) {
   const n = stops.length
   const first = stops[0]
   const last = stops[n - 1]
   // Reasons only claim what holds: manual plans can overrun the slot or miss a meal.
   const fits = first.start >= ctx.slot.start && last.end <= ctx.slot.end
-  const span = `${fmtTime(first.start)} to ${fmtTime(last.end)}`
-  const out = [fits ? `Fits your slot: ${span}` : `Runs ${span}, outside your slot`]
+  const span = timeSpan(first.start, last.end)
+  const spend = estimateSpend(stops.map((s) => s.listing))
+  const lead = [
+    fits ? `Fits ${span}` : `Runs ${span}, outside your slot`,
+    n === 1 ? '1 stop' : `${n} stops`,
+    fmtSpend(spend) || 'Spend not estimated',
+    `${fmtDuration(parts.travelMins)} travel`,
+  ]
+  const out = [lead.join(' · ')]
+  if (!spend.known) out.push(spendGap(spend))
+  const meals = ctx.meals.filter((w) => stops.some((s) => coversMeal(s, w)))
+  for (const m of meals) out.push(`${m.name.charAt(0).toUpperCase()}${m.name.slice(1)} covered`)
   if (ctx.members.length > 1) {
     const matched = ctx.members.filter((m) => stops.some((s) => memberScore(s.listing, m) >= 0.6)).length
     out.push(`Matches the interests of ${matched} of ${ctx.members.length} members`)
   }
-  out.push(`About ${fmtDuration(parts.travelMins)} of travel in total`)
   const deals = stops.filter((s) => isVerifiedDeal(s.listing)).length
   if (deals) out.push(deals === 1 ? 'Includes 1 source-checked deal' : `Includes ${deals} source-checked deals`)
-  const meals = ctx.meals.filter((w) => stops.some((s) => coversMeal(s, w)))
-  if (meals.length) out.push(`Covers ${meals.map((m) => m.name).join(' and ')}`)
+  const unconfirmed = stops.filter((s) => s.listing.type === 'place' && !s.listing.openingHours).length
+  if (unconfirmed) out.push(unconfirmed === 1 ? "1 stop's opening hours unconfirmed" : `${unconfirmed} stops' opening hours unconfirmed`)
   return out
 }
 
