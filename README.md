@@ -1,7 +1,3 @@
-<p align="center">
-  <img alt="OpenJio landing page showing a sample Marina Bay outing" src="docs/images/landing-page.png">
-</p>
-
 <h1 align="center">OpenJio</h1>
 
 <p align="center">
@@ -26,6 +22,10 @@
 
 OpenJio helps a group go from *“free this weekend?”* to *“see you there.”* Everyone gets one link for availability, votes, and the final itinerary.
 The current UI is designed for desktop use.
+
+<p align="center">
+  <img alt="OpenJio landing page showing a sample Marina Bay outing" src="docs/images/landing-page.png">
+</p>
 
 ## How it works
 
