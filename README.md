@@ -1,11 +1,31 @@
-# OpenJio
+<p align="center">
+  <img alt="OpenJio landing page showing a sample Marina Bay outing" src="docs/images/landing-page.png">
+</p>
 
-**Plan a Singapore outing together.** Find a time that works, agree on stops, and share one clear plan with everyone.
+<h1 align="center">OpenJio</h1>
+
+<p align="center">
+  <strong>Plan a Singapore outing together.</strong> Find a time that works, agree on stops, and share one clear plan with everyone.
+</p>
+
+<p align="center">
+  <img alt="branch: main" src="https://img.shields.io/badge/branch-main-0f766e">
+  <img alt="Docker Compose: 2.24+" src="https://img.shields.io/badge/Docker_Compose-2.24%2B-2496ED">
+  <img alt="cost: $0" src="https://img.shields.io/badge/cost-%240-6b21a8">
+</p>
+
+<p align="center">
+  <a href="#how-it-works">How it works</a> ·
+  <a href="#tech-stack">Tech stack</a> ·
+  <a href="#host-live-data-from-a-fresh-clone">Quick start</a> ·
+  <a href="#operate-the-installation">Operate</a> ·
+  <a href="#documentation">Docs</a>
+</p>
+
+---
 
 OpenJio helps a group go from *“free this weekend?”* to *“see you there.”* Everyone gets one link for availability, votes, and the final itinerary.
 The current UI is designed for desktop use.
-
-![OpenJio landing page showing a sample Marina Bay outing](docs/images/landing-page.png)
 
 ## How it works
 
